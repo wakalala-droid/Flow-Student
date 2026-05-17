@@ -1,0 +1,118 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.fontSize": 14,
+    "editor.lineHeight": 1.6,
+    "editor.wordWrap": "on",
+    "editor.minimap.enabled": false,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": true,
+    "editor.suggestSelection": "first",
+    "editor.quickSuggestions": {
+      "strings": true
+    },
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "tailwindCSS.experimental.classRegex": [
+      ["cn\\(([^)]*)\\)", "'([^']*)'"],
+      ["clsx\\(([^)]*)\\)", "'([^']*)'"]
+    ],
+    "files.exclude": {
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/.next": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.next": true
+    },
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.fontSize": 13,
+    "workbench.colorTheme": "Default Dark Modern",
+    "workbench.iconTheme": "vs-seti",
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+      "*.ts": "${capture}.js, ${capture}.d.ts",
+      "*.tsx": "${capture}.js",
+      "package.json": "package-lock.json, .npmrc, .nvmrc",
+      "next.config.*": "next-env.d.ts, vercel.json",
+      ".env.local": ".env.example, .env"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "bradlc.vscode-tailwindcss",
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint",
+      "ms-vscode.vscode-typescript-next",
+      "formulahendry.auto-rename-tag",
+      "christian-kohler.path-intellisense",
+      "ms-vsliveshare.vsliveshare",
+      "GitHub.copilot",
+      "eamodio.gitlens",
+      "PKief.material-icon-theme"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Next.js: dev",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/node_modules/.bin/next",
+        "args": ["dev"],
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "NODE_ENV": "development"
+        },
+        "console": "integratedTerminal",
+        "serverReadyAction": {
+          "pattern": "started server on .+, url: (https?://.+)",
+          "uriFormat": "%s",
+          "action": "openExternally"
+        }
+      }
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Dev Server",
+        "type": "shell",
+        "command": "npm run dev",
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "presentation": {
+          "reveal": "always",
+          "panel": "new"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Build",
+        "type": "shell",
+        "command": "npm run build",
+        "group": "build",
+        "problemMatcher": []
+      },
+      {
+        "label": "Install Dependencies",
+        "type": "shell",
+        "command": "npm install --legacy-peer-deps",
+        "group": "build",
+        "problemMatcher": []
+      }
+    ]
+  }
+}
