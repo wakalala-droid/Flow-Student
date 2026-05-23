@@ -82,7 +82,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
             style={{ width: `${Math.min(usagePct, 100)}%` }} />
         </div>
         <div className="flex justify-between text-[10px] text-[#7a7a9a] mt-1">
-          <span>{profile?.words_used?.toLocaleString() ?? 0} / {profile?.words_limit >= 999999999 ? '∞' : profile?.words_limit?.toLocaleString()} words</span>
+          <span>{profile?.words_used?.toLocaleString() ?? 0} / {(profile?.words_limit ?? 0) >= 999999999 ? '∞' : profile?.words_limit?.toLocaleString()} words</span>
           {profile?.plan === 'free' && <Link href="/dashboard/billing" className="text-violet-400">Upgrade</Link>}
         </div>
       </div>
