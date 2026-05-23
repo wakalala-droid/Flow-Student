@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { DM_Sans, DM_Mono } from 'next/font/google'
 import './globals.css'
 
@@ -15,15 +15,23 @@ const dmMono = DM_Mono({
   display: 'swap',
 })
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#0a0a0f',
+}
+
 export const metadata: Metadata = {
   title: 'Flow-Student — AI Writing Suite',
-  description: 'Humanize AI text, detect AI content, fix grammar, check plagiarism, and more. Built for students in Zambia and beyond.',
+  description: 'Humanize AI text, detect AI content, fix grammar, check plagiarism. Built for students.',
   keywords: ['AI humanizer', 'plagiarism checker', 'grammar fixer', 'Zambia', 'students'],
-  authors: [{ name: 'Flow-Student' }],
-  openGraph: {
-    title: 'Flow-Student AI Writing Suite',
-    description: 'The all-in-one AI writing platform for students.',
-    type: 'website',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Flow-Student',
   },
 }
 
