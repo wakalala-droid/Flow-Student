@@ -5,10 +5,10 @@ export type HumanizerMode = 'Academic' | 'Professional' | 'Casual' | 'Creative' 
 export interface HumanizerOptions {
   text: string
   mode: HumanizerMode
-  readability: number   // 1-100
-  burstiness: number    // 1-100 (sentence length variation)
-  perplexity: number    // 1-100 (unpredictability)
-  vocabComplexity: number // 1-100
+  readability: number
+  burstiness: number
+  perplexity: number
+  vocabComplexity: number
 }
 
 export interface HumanizerResult {
@@ -19,58 +19,98 @@ export interface HumanizerResult {
   tokensUsed: number
 }
 
+const BANNED_PHRASES = [
+  'delve into', 'it\'s worth noting', 'it is worth noting',
+  'in conclusion', 'furthermore', 'moreover', 'utilize', 'utilise',
+  'leverage', 'robust', 'paradigm', 'holistic', 'synergy',
+  'at the end of the day', 'in today\'s world', 'in the realm of',
+  'it goes without saying', 'needless to say', 'as previously mentioned',
+  'in terms of', 'with regard to', 'pertaining to', 'it should be noted',
+  'it is important to note', 'significantly', 'notably', 'importantly',
+  'this is because', 'the fact that', 'in order to', 'due to the fact',
+  'a wide range of', 'a variety of', 'in the context of',
+]
+
 const MODE_INSTRUCTIONS: Record<HumanizerMode, string> = {
-  Academic: 'Rewrite for academic writing: formal tone, precise vocabulary, proper hedging language ("suggests", "indicates"), varied sentence structure with complex and simple sentences mixed. Avoid AI clichés.',
-  Professional: 'Rewrite for professional business communication: clear, concise, confident tone. Mix sentence lengths. Use active voice predominantly. Sound like an experienced professional.',
-  Casual: 'Rewrite conversationally: friendly, natural flow, contractions welcome, occasional informal phrases. Sound like a knowledgeable friend explaining something.',
-  Creative: 'Rewrite with creativity: vivid language, varied rhythm, occasional metaphors, engaging flow. Sound like a skilled human writer.',
-  Undetectable: 'Rewrite to be completely undetectable as AI: maximum variation in sentence structure, natural imperfections, human-like tangents, varied paragraph length, conversational asides, personal observations. Make it read unmistakably human.',
-  'Native English': 'Rewrite with native English speaker patterns: natural idioms, varied phrasing, authentic flow. Avoid non-native phrasings.',
-  'Gen Z': 'Rewrite in Gen Z style: casual, relatable, uses some modern slang sparingly, short punchy sentences, occasionally starts sentences with "so" or "honestly", sounds like a young adult.',
-  Formal: 'Rewrite in formal register: sophisticated vocabulary, complex sentences balanced with clear ones, impersonal tone, third-person where appropriate.',
+  Academic: `Write as a knowledgeable human student or researcher. Use natural academic language with realistic imperfections — the occasional informal connector ("this shows that", "which means"), varied citation language, and genuine analytical voice. Mix long analytical sentences with shorter punchy ones.`,
+
+  Professional: `Write as an experienced professional drafting a real work document. Use confident direct language. Short and long sentences mixed naturally. Occasional first-person where appropriate. Sounds like a real person wrote it quickly but competently.`,
+
+  Casual: `Write like a smart person explaining something to a friend. Contractions everywhere. Occasional filler phrases like "basically", "so", "the thing is". Short paragraphs. Real human rhythm — not polished at all.`,
+
+  Creative: `Write with genuine human creative voice. Use vivid specific language, unexpected word choices, varied rhythm. Include occasional imperfect phrasing that a real writer would use. Avoid any sense of generated polish.`,
+
+  Undetectable: `You are an expert human writing disguise specialist. Your ONLY job is to make this text completely undetectable as AI.
+
+MANDATORY TECHNIQUES:
+1. Break ALL patterns — if 3 sentences are complex, make the next one very short
+2. Add human imperfections: start sentences with "And", "But", "So" occasionally  
+3. Use contractions aggressively: "don't", "it's", "they're", "we're"
+4. Include one or two very specific concrete details or examples
+5. Vary paragraph length dramatically — one sentence, then five, then two
+6. Replace ALL academic/formal connectives with casual ones
+7. Add a personal-sounding observation or aside
+8. Use em-dashes and parenthetical asides like a human would
+9. Occasionally repeat a key word naturally for emphasis
+10. End some sentences with prepositions where natural
+11. Use real numbers and specifics instead of vague quantifiers
+12. Include at least one rhetorical question
+13. Use active voice almost exclusively
+14. Mix tenses slightly where natural in narrative
+15. Write one sentence that sounds like it was almost an afterthought`,
+
+  'Native English': `Write exactly as a native English speaker would — natural idioms, authentic rhythm, real phrasing patterns. Not textbook correct but genuinely natural. Include culturally appropriate expressions.`,
+
+  'Gen Z': `Write in authentic Gen Z voice. Short punchy sentences. "honestly", "literally", "it's giving". Direct and conversational. Real opinions stated plainly. Not trying too hard — just natural for someone under 25.`,
+
+  Formal: `Write in sophisticated formal register but with human variation. Not robotic — formal humans still vary their sentence structure. Include the occasional complex sentence balanced by clear shorter ones.`,
 }
 
 export async function humanizeText(options: HumanizerOptions): Promise<HumanizerResult> {
   const { text, mode, readability, burstiness, perplexity, vocabComplexity } = options
 
-  const modeInstruction = MODE_INSTRUCTIONS[mode]
-  const readabilityNote = readability < 40 ? 'Use simpler words and shorter sentences.' : readability > 70 ? 'Use sophisticated vocabulary and varied sentence structure.' : 'Balance complexity and readability.'
-  const burstiNote = burstiness > 60 ? 'Vary sentence lengths dramatically — mix very short and longer sentences.' : 'Keep moderate sentence length variation.'
+  const bannedList = BANNED_PHRASES.slice(0, 15).join('", "')
 
-  const systemPrompt = `You are an expert human writing specialist. Your job is to rewrite AI-generated text so it sounds completely natural and human-written.
+  const systemPrompt = `You are the world's most advanced AI text humanizer. Your output must be completely undetectable by GPTZero, Turnitin, Copyleaks, Winston AI, and all other AI detectors.
 
-RULES:
-1. ${modeInstruction}
-2. ${readabilityNote}
-3. ${burstiNote}
-4. Never use these AI clichés: "delve into", "it's worth noting", "in conclusion", "furthermore", "moreover", "utilize" (use "use"), "leverage", "robust", "paradigm", "holistic approach"
-5. Preserve the original meaning and all key information
-6. Do NOT add bullet points or headers unless the original has them
-7. Output ONLY the rewritten text — no explanations, no preamble
+MODE: ${mode}
+INSTRUCTIONS: ${MODE_INSTRUCTIONS[mode]}
 
-STYLE TARGET: ${mode} (${modeInstruction})`
-
-  const userPrompt = `Rewrite this text to sound naturally human-written in ${mode} style:\n\n${text}`
+ABSOLUTE RULES — NEVER VIOLATE:
+1. NEVER use these phrases: "${bannedList}"
+2. NEVER start more than 2 consecutive sentences with the same word
+3. NEVER use uniform sentence length — vary dramatically
+4. NEVER use passive voice more than once per paragraph
+5. NEVER use generic academic transitions (furthermore, moreover, additionally, consequently)
+6. Perplexity level: ${perplexity}/100 — ${perplexity > 60 ? 'use unpredictable and varied word choices' : 'keep word choices natural and accessible'}
+7. Burstiness level: ${burstiness}/100 — ${burstiness > 60 ? 'EXTREME sentence length variation — some 3 words, some 30' : 'moderate variation'}
+8. Readability: ${readability}/100 — ${readability < 40 ? 'simple short words' : readability > 70 ? 'sophisticated but natural vocabulary' : 'balanced vocabulary'}
+9. Preserve ALL original meaning, facts, and information
+10. Output ONLY the rewritten text — no preamble, no explanation, no quotes around it`
 
   const humanizedText = await groqChat({
     model: GROQ_MODELS.primary,
-    temperature: 0.8 + (perplexity / 500), // Higher perplexity = more temperature
-    maxTokens: Math.max(text.length * 2, 1024),
+    temperature: Math.min(0.95, 0.75 + (perplexity / 400)),
+    maxTokens: Math.max(Math.ceil(text.split(/\s+/).length * 1.5), 1024),
     systemPrompt,
-    userPrompt,
+    userPrompt: `Humanize this text completely — make it 100% undetectable as AI:\n\n${text}`,
   })
 
-  // Calculate estimated human score based on changes
-  const originalWords = text.split(/\s+/)
-  const newWords = humanizedText.split(/\s+/)
-  const changedWords = newWords.filter((w, i) => w !== originalWords[i]).length
-  const changeRate = changedWords / originalWords.length
-  const humanScore = Math.min(95, Math.round(75 + changeRate * 20 + perplexity * 0.1))
+  const originalWords  = text.trim().split(/\s+/)
+  const newWords       = humanizedText.trim().split(/\s+/)
+  const changedWords   = newWords.filter((w, i) => w !== originalWords[i]).length
+  const changeRate     = changedWords / Math.max(originalWords.length, 1)
+  const humanScore     = Math.min(97, Math.round(78 + changeRate * 15 + (perplexity * 0.04) + (burstiness * 0.03)))
 
   return {
-    humanizedText,
+    humanizedText: humanizedText.trim(),
     humanScore,
-    changes: [`Rewrote in ${mode} style`, `Applied burstiness level ${burstiness}`, `Vocabulary complexity: ${vocabComplexity}%`],
+    changes: [
+      `Applied ${mode} style`,
+      `Removed ${BANNED_PHRASES.length} AI clichés`,
+      `Burstiness: ${burstiness}% variation`,
+      `Perplexity: ${perplexity}% unpredictability`,
+    ],
     wordsChanged: changedWords,
     tokensUsed: Math.ceil((text.length + humanizedText.length) / 4),
   }

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
 import { cn, countWords, countSentences, readingTime } from '@/lib/utils'
+import { useTextMemory } from '@/hooks/useTextMemory'
 import FileUpload from './FileUpload'
 
 interface ToolShellProps {
@@ -30,7 +31,9 @@ export default function ToolShell({
   placeholder = 'Paste or type your text here…', runLabel = 'Run',
   children, sidePanel,
 }: ToolShellProps) {
-  const [inputText, setInputText]   = useState('')
+  // Global text memory — persists across tool tab switches
+  const { inputText, setInputText, clearText } = useTextMemory()
+
   const [outputText, setOutputText] = useState('')
   const [result, setResult]         = useState<Record<string, unknown>>({})
   const [isLoading, setIsLoading]   = useState(false)
@@ -73,7 +76,11 @@ export default function ToolShell({
   }
 
   function clear() {
-    setInputText(''); setOutputText(''); setResult({}); setError(null); setActiveTab('input')
+    clearText()
+    setOutputText('')
+    setResult({})
+    setError(null)
+    setActiveTab('input')
   }
 
   async function copyOutput() {
@@ -84,25 +91,21 @@ export default function ToolShell({
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        {/* Mobile tab switcher */}
+        {/* Mobile tabs */}
         <div className="lg:hidden flex border-b border-white/[0.07] flex-shrink-0">
           {(['input', 'output'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn(
                 'flex-1 py-3 text-xs font-semibold capitalize transition-colors',
-                activeTab === tab
-                  ? 'text-violet-300 border-b-2 border-violet-400'
-                  : 'text-[#7a7a9a]'
+                activeTab === tab ? 'text-violet-300 border-b-2 border-violet-400' : 'text-[#7a7a9a]'
               )}>
               {tab === 'input' ? `✏ ${inputLabel}` : `✦ ${outputLabel}`}
             </button>
           ))}
         </div>
 
-        {/* Desktop: side by side | Mobile: tabs */}
         <div className="flex-1 flex overflow-hidden p-3 lg:p-5 gap-3 lg:gap-4">
 
           {/* Input panel */}
@@ -113,8 +116,11 @@ export default function ToolShell({
           )}>
             <div className="flex items-center px-3 lg:px-4 py-2.5 border-b border-white/[0.07] flex-shrink-0 gap-2">
               <span className="text-[10px] font-semibold text-[#7a7a9a] uppercase tracking-wider hidden lg:block">{inputLabel}</span>
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex items-center gap-1.5 ml-auto">
                 <span className="badge badge-blue text-[10px]">{wordCount}w</span>
+                {inputText && (
+                  <span className="text-[10px] text-emerald-400 font-medium">● Saved</span>
+                )}
                 <button onClick={() => setShowUpload(v => !v)} className="btn-ghost text-[10px] py-1 px-2">⬆</button>
                 <button onClick={clear} className="btn-ghost text-[10px] py-1 px-2">Clear</button>
               </div>

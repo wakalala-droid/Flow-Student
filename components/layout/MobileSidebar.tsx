@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -10,12 +10,16 @@ const NAV_EXTRAS = [
   { href: '/dashboard/documents', icon: '📁', label: 'Documents' },
   { href: '/dashboard/billing',   icon: '💳', label: 'Billing' },
   { href: '/dashboard/settings',  icon: '⚙️', label: 'Settings' },
-  { href: '/dashboard/admin',     icon: '🛡️', label: 'Admin Panel' },
 ]
 
 export default function MobileSidebar({ profile }: { profile: Profile | null }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]       = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const pathname = usePathname()
+
+  useEffect(() => {
+    fetch('/api/admin/check').then(r => r.json()).then(d => setIsAdmin(d.isAdmin))
+  }, [])
 
   return (
     <>
@@ -27,18 +31,12 @@ export default function MobileSidebar({ profile }: { profile: Profile | null }) 
         </svg>
       </button>
 
-      {/* Backdrop */}
-      {open && (
-        <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
-          onClick={() => setOpen(false)} />
-      )}
+      {open && <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)} />}
 
-      {/* Drawer */}
       <aside className={cn(
         'fixed inset-y-0 left-0 z-50 w-72 bg-[#111118] border-r border-white/[0.07] flex flex-col transition-transform duration-300 ease-out',
         open ? 'translate-x-0' : '-translate-x-full'
       )}>
-        {/* Header */}
         <div className="px-4 py-5 border-b border-white/[0.07] flex items-center justify-between">
           <Link href="/dashboard/humanizer" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#6c63ff] to-violet-400 flex items-center justify-center text-base">✦</div>
@@ -48,12 +46,9 @@ export default function MobileSidebar({ profile }: { profile: Profile | null }) 
             </div>
           </Link>
           <button onClick={() => setOpen(false)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-[#7a7a9a] hover:text-[#e8e8f0] transition-colors">
-            ✕
-          </button>
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-[#7a7a9a]">✕</button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
           <p className="px-2.5 pt-2 pb-1.5 text-[10px] font-semibold text-[#7a7a9a] uppercase tracking-widest">Tools</p>
           {TOOLS.map(tool => {
@@ -65,9 +60,7 @@ export default function MobileSidebar({ profile }: { profile: Profile | null }) 
                 <span className="text-lg w-6 text-center flex-shrink-0">{tool.icon}</span>
                 <span className="truncate">{tool.label}</span>
                 {tool.badge && (
-                  <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#6c63ff]/25 text-violet-300">
-                    {tool.badge}
-                  </span>
+                  <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#6c63ff]/25 text-violet-300">{tool.badge}</span>
                 )}
               </Link>
             )
@@ -81,9 +74,17 @@ export default function MobileSidebar({ profile }: { profile: Profile | null }) 
               <span>{item.label}</span>
             </Link>
           ))}
+
+          {isAdmin && (
+            <Link href="/dashboard/admin" onClick={() => setOpen(false)}
+              className={cn('nav-item', pathname === '/dashboard/admin' && 'nav-item-active')}>
+              <span className="text-lg w-6 text-center flex-shrink-0">🛡️</span>
+              <span>Admin Panel</span>
+              <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-400/20 text-red-400">ADMIN</span>
+            </Link>
+          )}
         </nav>
 
-        {/* User */}
         <div className="border-t border-white/[0.07] p-4 mobile-safe-bottom">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-400 flex items-center justify-center text-sm font-bold text-[#0a0a0f] flex-shrink-0">
@@ -96,9 +97,7 @@ export default function MobileSidebar({ profile }: { profile: Profile | null }) 
           </div>
           {profile?.plan === 'free' && (
             <Link href="/dashboard/billing" onClick={() => setOpen(false)}
-              className="mt-3 btn-primary w-full justify-center text-xs py-2.5">
-              ✦ Upgrade Plan
-            </Link>
+              className="mt-3 btn-primary w-full justify-center text-xs py-2.5">✦ Upgrade Plan</Link>
           )}
         </div>
       </aside>
