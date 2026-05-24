@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
+import LineWaves from './LineWaves'
 
 // ── TOOLS / STEPS / PLANS / FAQS DATA ────────────────────────────────────────
 const TOOLS = [
@@ -36,92 +37,6 @@ const FAQS = [
   { q: 'What AI model powers it?', a: 'We use Llama 3.3 70B via Groq — one of the fastest and most capable open models available. Results in seconds.' },
 ]
 
-// ── LINEWAVES HERO BACKGROUND ─────────────────────────────────────────────────
-function LineWaves() {
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    let animId: number
-    const canvas = document.createElement('canvas')
-    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;opacity:0.55'
-    container.appendChild(canvas)
-    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false })
-    if (!gl) return
-
-    gl.clearColor(0, 0, 0, 0)
-
-    function resize() {
-      canvas.width  = container!.offsetWidth
-      canvas.height = container!.offsetHeight
-      gl!.viewport(0, 0, canvas.width, canvas.height)
-    }
-    window.addEventListener('resize', resize)
-    resize()
-
-    const vs = gl.createShader(gl.VERTEX_SHADER)!
-    gl.shaderSource(vs, `attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`)
-    gl.compileShader(vs)
-
-    const fs = gl.createShader(gl.FRAGMENT_SHADER)!
-    gl.shaderSource(fs, `
-precision highp float;
-uniform float uT;
-uniform vec2 uR;
-void main(){
-  vec2 uv=(gl_FragCoord.xy/uR)*2.-1.;
-  float t=uT*.25;
-  float v=0.;
-  for(float i=0.;i<6.;i++){
-    float fi=i*.7+1.3;
-    v+=sin(uv.x*fi*2.1+t*1.1+i)+sin(uv.y*fi*1.7+t*.9+i*1.3);
-  }
-  v=v/12.+.5;
-  vec3 col=mix(vec3(.18,.12,.55),vec3(.42,.26,1.),v);
-  col=mix(col,vec3(.08,.45,.7),sin(v*3.14)*0.4);
-  float alpha=v*.45+.1;
-  alpha*=smoothstep(-1.,-.4,uv.y)*smoothstep(.6,-.1,uv.y+.3);
-  gl_FragColor=vec4(col*alpha,alpha);
-}`)
-    gl.compileShader(fs)
-
-    const prog = gl.createProgram()!
-    gl.attachShader(prog, vs); gl.attachShader(prog, fs)
-    gl.linkProgram(prog); gl.useProgram(prog)
-
-    const buf = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW)
-    const loc = gl.getAttribLocation(prog, 'p')
-    gl.enableVertexAttribArray(loc)
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
-
-    const uT = gl.getUniformLocation(prog, 'uT')
-    const uR = gl.getUniformLocation(prog, 'uR')
-
-    gl.enable(gl.BLEND)
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-
-    function draw(time: number) {
-      animId = requestAnimationFrame(draw)
-      gl!.clear(gl!.COLOR_BUFFER_BIT)
-      gl!.uniform1f(uT, time * 0.001)
-      gl!.uniform2f(uR, canvas.width, canvas.height)
-      gl!.drawArrays(gl!.TRIANGLES, 0, 3)
-    }
-    animId = requestAnimationFrame(draw)
-
-    return () => {
-      cancelAnimationFrame(animId)
-      window.removeEventListener('resize', resize)
-      if (container.contains(canvas)) container.removeChild(canvas)
-    }
-  }, [])
-
-  return <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }} />
-}
 
 // ── SCROLL STACK STEPS ────────────────────────────────────────────────────────
 function ScrollStackSteps() {
@@ -266,11 +181,27 @@ export default function Landing() {
       {/* ── HERO with LineWaves ── */}
       <section style={{ position: 'relative', minHeight: '88vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 24px 0', textAlign: 'center', overflow: 'hidden' }}>
 
-        {/* WebGL wave background */}
-        <LineWaves />
+        {/* ── LineWaves — exact props as specified, hero only ── */}
+        <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+          <LineWaves
+            speed={0.1}
+            innerLineCount={40}
+            outerLineCount={34}
+            warpIntensity={1}
+            rotation={-144}
+            edgeFadeWidth={0}
+            colorCycleSpeed={0.2}
+            brightness={0.2}
+            color1="#A855F7"
+            color2="#7C3AED"
+            color3="#ffffff"
+            enableMouseInteraction
+            mouseInfluence={0.9}
+          />
+        </div>
 
-        {/* Soft dark gradient fade OUT at the bottom into the rest of page */}
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 220, background: 'linear-gradient(to bottom, transparent 0%, #0a0a0f 100%)', zIndex: 1, pointerEvents: 'none' }} />
+        {/* Graceful dark fade at bottom — lets features section appear cleanly */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 280, background: 'linear-gradient(to bottom, transparent 0%, rgba(10,10,15,0.6) 50%, #0a0a0f 100%)', zIndex: 1, pointerEvents: 'none' }} />
 
         <div style={{ position: 'relative', zIndex: 2, maxWidth: 780 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 20, border: '1px solid rgba(108,99,255,0.35)', background: 'rgba(108,99,255,0.1)', fontSize: 12, color: '#a78bfa', marginBottom: 32, fontWeight: 500 }}>

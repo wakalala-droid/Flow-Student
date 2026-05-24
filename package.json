@@ -43,7 +43,8 @@
     "nanoid": "^5.0.7",
     "zod": "^3.23.8",
     "react-hook-form": "^7.52.1",
-    "@hookform/resolvers": "^3.9.0"
+    "@hookform/resolvers": "^3.9.0",
+    "ogl": "^1.0.3"
   },
   "devDependencies": {
     "typescript": "^5",
