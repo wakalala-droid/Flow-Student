@@ -86,7 +86,7 @@ function ScrollStackSteps() {
       cards.forEach((card, i) => {
         const rect      = card.getBoundingClientRect()
         const cardDocTop= scrollY + rect.top + (card.style.transform ? 0 : 0)
-        const rawTop    = section.getBoundingClientRect().top + scrollY + card.offsetTop
+        const rawTop    = (section?.getBoundingClientRect().top ?? 0) + scrollY + card.offsetTop
         const pinStart  = rawTop - pinOffset - stackGap * i
         // last card unpins naturally — no stuck behaviour
         const pinEnd    = rawTop + card.offsetHeight
