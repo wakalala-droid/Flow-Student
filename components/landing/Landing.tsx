@@ -56,12 +56,21 @@ const FAQS = [
   { q:'What AI model powers it?', a:'We use Llama 3.3 70B via Groq — one of the fastest and most capable open models available. Results in seconds.' },
 ]
 
-// ── CASSIS-STYLE NAV — expands/contracts on scroll ───────────────────────────
+// ── CASSIS-STYLE NAV — pills on scroll down, full on scroll up ───────────────
 function Nav() {
   const [scrolled, setScrolled] = useState(false)
+  const lastY = useRef(0)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40)
+    const onScroll = () => {
+      const y = window.scrollY
+      const goingDown = y > lastY.current
+      // Pill when scrolled down past 60px; full when scrolling back up or at top
+      if (y < 60) setScrolled(false)
+      else if (goingDown) setScrolled(true)
+      else setScrolled(false)
+      lastY.current = y
+    }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
@@ -216,27 +225,9 @@ function ScrollStackSteps() {
   }, [])
 
   return (
-    /* Purple glowing mesh background — like Cassis but purple */
-    <div style={{ position:'relative', padding:'40px 24px 200px' }}>
-
-      {/* Background mesh glow */}
-      <div style={{ position:'absolute', inset:0, overflow:'hidden', borderRadius:0, pointerEvents:'none' }}>
-        <div style={{ position:'absolute', top:'10%', left:'50%', transform:'translateX(-50%)', width:700, height:700, borderRadius:'50%', background:'radial-gradient(ellipse, rgba(124,58,237,0.18) 0%, rgba(168,85,247,0.08) 40%, transparent 70%)', filter:'blur(40px)' }} />
-        <div style={{ position:'absolute', top:'30%', left:'15%', width:300, height:300, borderRadius:'50%', background:'radial-gradient(ellipse, rgba(168,85,247,0.1) 0%, transparent 70%)', filter:'blur(30px)' }} />
-        <div style={{ position:'absolute', top:'50%', right:'10%', width:250, height:250, borderRadius:'50%', background:'radial-gradient(ellipse, rgba(96,165,250,0.08) 0%, transparent 70%)', filter:'blur(30px)' }} />
-        {/* Subtle grid lines */}
-        <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0.04 }} xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
-              <path d="M 48 0 L 0 0 0 48" fill="none" stroke="rgba(168,85,247,1)" strokeWidth="0.5"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-
+    <div style={{ position:'relative', padding:'0 24px 60px' }}>
       {/* Cards container */}
-      <div ref={sectionRef} style={{ position:'relative', maxWidth:680, margin:'0 auto' }}>
+      <div ref={sectionRef} style={{ position:'relative', maxWidth:640, margin:'0 auto' }}>
         {STEPS.map((step, i) => (
           <div
             key={step.n}
@@ -484,15 +475,26 @@ export default function Landing() {
       </section>
 
       {/* ── HOW IT WORKS ── */}
-      <section id="how-it-works" style={{ padding:'60px 0 0', background:'rgba(255,255,255,0.01)', borderTop:'1px solid rgba(255,255,255,0.05)' }}>
-        <FadeIn>
-          <div style={{ textAlign:'center', marginBottom:48, padding:'0 24px' }}>
-            <Label>Simple Steps</Label>
-            <h2 style={{ fontSize:'clamp(28px,4vw,44px)', fontWeight:800, color:'#fff', letterSpacing:-1.5, marginBottom:8 }}>Up and Running in 60 Seconds</h2>
-            <p style={{ fontSize:14, color:'rgba(232,232,240,0.4)' }}>Scroll through each step below</p>
-          </div>
-        </FadeIn>
-        <ScrollStackSteps />
+      <section id="how-it-works" style={{ position:'relative', overflow:'hidden' }}>
+        {/* Purple mesh background fills entire section */}
+        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 80% 60% at 50% 30%, rgba(124,58,237,0.22) 0%, rgba(168,85,247,0.08) 50%, transparent 100%)', pointerEvents:'none', zIndex:0 }} />
+        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 50% 80% at 20% 60%, rgba(96,165,250,0.07) 0%, transparent 70%)', pointerEvents:'none', zIndex:0 }} />
+        <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:0 }}>
+          <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0.05 }} xmlns="http://www.w3.org/2000/svg">
+            <defs><pattern id="g2" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M 48 0 L 0 0 0 48" fill="none" stroke="rgba(168,85,247,1)" strokeWidth="0.5"/></pattern></defs>
+            <rect width="100%" height="100%" fill="url(#g2)" />
+          </svg>
+        </div>
+        <div style={{ position:'relative', zIndex:1 }}>
+          <FadeIn>
+            <div style={{ textAlign:'center', padding:'56px 24px 32px' }}>
+              <Label>Simple Steps</Label>
+              <h2 style={{ fontSize:'clamp(28px,4vw,44px)', fontWeight:800, color:'#fff', letterSpacing:-1.5, marginBottom:8 }}>Up and Running in 60 Seconds</h2>
+              <p style={{ fontSize:14, color:'rgba(232,232,240,0.4)' }}>Scroll through each step below</p>
+            </div>
+          </FadeIn>
+          <ScrollStackSteps />
+        </div>
       </section>
 
       {/* ── PRICING ── */}
@@ -592,6 +594,26 @@ export default function Landing() {
         *{box-sizing:border-box;margin:0;padding:0}
         html{scroll-behavior:smooth}
         a{-webkit-tap-highlight-color:transparent}
+
+        /* ── Mobile ── */
+        @media(max-width:640px){
+          .nav-links{display:none!important}
+          h1{letter-spacing:-1.5px!important}
+          section{padding-left:16px!important;padding-right:16px!important}
+          .stat-row{gap:24px!important;flex-wrap:wrap}
+          .stat-val{font-size:clamp(28px,8vw,42px)!important}
+          .hero-btns{flex-direction:column;align-items:center}
+          .hero-btns a,.hero-btns link{width:100%;max-width:300px;text-align:center;justify-content:center}
+          .plans-grid{grid-template-columns:1fr!important}
+          .tools-grid{grid-template-columns:1fr!important}
+          .dashboard-preview .sidebar{display:none!important}
+          .cta-box{padding:36px 20px!important}
+          .cta-box h2{font-size:26px!important}
+        }
+        @media(max-width:480px){
+          .stat-row{gap:16px}
+          .stat-val{font-size:28px!important}
+        }
       `}</style>
     </div>
   )
