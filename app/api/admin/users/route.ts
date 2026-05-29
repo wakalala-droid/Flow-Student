@@ -1,11 +1,10 @@
 // app/api/admin/users/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
 
-// Pure supabase-js admin client — zero RLS, no cookies needed for data queries
+// Pure admin client for auth.admin.listUsers and bulk queries — zero RLS
 function adminDb() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,37 +13,21 @@ function adminDb() {
   )
 }
 
-// Session client — reads cookies exactly like your existing server.ts
-function sessionClient() {
-  const cookieStore = cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) {
-          try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {}
-        },
-      },
-    }
-  )
-}
+// Exact same pattern as /api/admin/check which is confirmed working
+async function requireAdmin() {
+  const supabase = createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return null
 
-async function requireAdmin(): Promise<string | null> {
-  // Step 1: get session user via cookie (same as your working middleware)
-  const { data: { user } } = await sessionClient().auth.getUser()
-  if (!user) return null
-
-  // Step 2: check is_admin via adminDb (bypasses RLS completely)
-  const { data, error } = await adminDb()
+  const service = createServiceClient()
+  const { data, error } = await service
     .from('profiles')
     .select('is_admin')
     .eq('id', user.id)
-    .single()
+    .limit(1)
 
-  if (error || !data?.is_admin) return null
-  return user.id
+  if (error || !data?.[0]?.is_admin) return null
+  return user
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -55,12 +38,12 @@ const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
 }
 
 export async function GET() {
-  const adminId = await requireAdmin()
-  if (!adminId) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
+  const admin = await requireAdmin()
+  if (!admin) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
 
   const db = adminDb()
 
-  // auth.admin.listUsers — reads auth.users directly, zero RLS
+  // Pull all users from auth.users — bypasses RLS entirely
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
 
@@ -111,8 +94,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const adminId = await requireAdmin()
-  if (!adminId) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
+  const admin = await requireAdmin()
+  if (!admin) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
 
   const { userId, updates } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
@@ -137,8 +120,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const adminId = await requireAdmin()
-  if (!adminId) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
+  const admin = await requireAdmin()
+  if (!admin) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
 
   const { userId } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
