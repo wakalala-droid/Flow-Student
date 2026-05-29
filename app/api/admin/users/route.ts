@@ -1,11 +1,11 @@
 // app/api/admin/users/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 
-function adminClient() {
+// True bypass client — supabase-js with service role, no cookies, no RLS
+function adminDb() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -13,28 +13,20 @@ function adminClient() {
   )
 }
 
-function anonClient() {
-  const cookieStore = cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) => {
-          try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {}
-        },
-      },
-    }
-  )
-}
-
+// Uses the same auth pattern as /api/admin/check which already works
 async function requireAdmin() {
-  const anon = anonClient()
-  const { data: { user } } = await anon.auth.getUser()
-  if (!user) return null
-  const { data } = await adminClient().from('profiles').select('is_admin').eq('id', user.id).single()
-  return data?.is_admin ? user : null
+  const supabase = createClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error || !user) return null
+
+  const service = createServiceClient()
+  const { data } = await service
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .limit(1)
+
+  return data?.[0]?.is_admin ? user : null
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -48,89 +40,55 @@ export async function GET() {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
-  const db = adminClient()
+  const db = adminDb()
 
-  // Step 1: Pull ALL users from auth.users using the admin API
-  // This ALWAYS works regardless of RLS — it's the master list
+  // Pull every user from auth.users — zero RLS, always works
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
-  if (authError) {
-    console.error('[admin] auth.admin.listUsers error:', authError)
-    return NextResponse.json({ error: authError.message }, { status: 500 })
-  }
+  if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
 
   const authUsers = authData?.users ?? []
   if (authUsers.length === 0) return NextResponse.json([])
 
   const userIds = authUsers.map(u => u.id)
 
-  // Step 2: Pull profiles for all those user IDs
-  const { data: profiles, error: profileError } = await db
-    .from('profiles')
-    .select('*')
-    .in('id', userIds)
+  // Pull profiles, scans, transactions — adminDb bypasses RLS
+  const [profilesRes, scansRes, txRes] = await Promise.all([
+    db.from('profiles').select('*').in('id', userIds),
+    db.from('ai_scans').select('id,user_id,tool,word_count,created_at').in('user_id', userIds).order('created_at', { ascending: false }).limit(5000),
+    db.from('payment_transactions').select('id,user_id,amount,currency,plan,status,network,mobile_number,created_at').in('user_id', userIds).order('created_at', { ascending: false }),
+  ])
 
-  if (profileError) {
-    console.error('[admin] profiles error:', profileError)
-    // Don't fail — build from auth users alone
-  }
+  type P  = Record<string, unknown>
+  type S  = { id: string; user_id: string; tool: string; word_count: number; created_at: string }
+  type Tx = { id: string; user_id: string; amount: number; status: string; currency: string; plan: string; network: string; mobile_number: string; created_at: string }
 
-  // Step 3: Pull scans + transactions
-  const { data: scans } = await db
-    .from('ai_scans')
-    .select('id, user_id, tool, word_count, created_at')
-    .in('user_id', userIds)
-    .order('created_at', { ascending: false })
-    .limit(5000)
+  const profileMap = ((profilesRes.data ?? []) as P[]).reduce((acc, p) => { acc[p.id as string] = p; return acc }, {} as Record<string, P>)
+  const scansMap   = ((scansRes.data   ?? []) as S[]).reduce((acc, s) => { (acc[s.user_id] ??= []).push(s); return acc }, {} as Record<string, S[]>)
+  const txMap      = ((txRes.data      ?? []) as Tx[]).reduce((acc, t) => { (acc[t.user_id] ??= []).push(t); return acc }, {} as Record<string, Tx[]>)
 
-  const { data: transactions } = await db
-    .from('payment_transactions')
-    .select('id, user_id, amount, currency, plan, status, network, mobile_number, created_at')
-    .in('user_id', userIds)
-    .order('created_at', { ascending: false })
-
-  type Profile = Record<string, unknown>
-  type Scan    = { id: string; user_id: string; tool: string; word_count: number; created_at: string }
-  type Tx      = { id: string; user_id: string; amount: number; status: string; currency: string; plan: string; network: string; mobile_number: string; created_at: string }
-
-  const profileMap = ((profiles ?? []) as Profile[]).reduce((acc, p) => {
-    acc[p.id as string] = p; return acc
-  }, {} as Record<string, Profile>)
-
-  const scansMap = ((scans ?? []) as Scan[]).reduce((acc, s) => {
-    (acc[s.user_id] ??= []).push(s); return acc
-  }, {} as Record<string, Scan[]>)
-
-  const txMap = ((transactions ?? []) as Tx[]).reduce((acc, t) => {
-    (acc[t.user_id] ??= []).push(t); return acc
-  }, {} as Record<string, Tx[]>)
-
-  // Step 4: Merge auth users + profiles — auth is the source of truth
-  const enriched = authUsers.map(authUser => {
-    const profile = (profileMap[authUser.id] ?? {}) as Record<string, unknown>
-    const userScans = scansMap[authUser.id] ?? []
-    const userTxns  = txMap[authUser.id]    ?? []
+  const enriched = authUsers.map(au => {
+    const p  = (profileMap[au.id] ?? {}) as P
+    const s  = scansMap[au.id] ?? []
+    const tx = txMap[au.id]    ?? []
     return {
-      id:           authUser.id,
-      email:        authUser.email ?? ((profile as Record<string, unknown>).email as string) ?? '',
-      full_name:    (profile.full_name as string) ?? authUser.user_metadata?.full_name ?? null,
-      avatar_url:   (profile.avatar_url as string) ?? authUser.user_metadata?.avatar_url ?? null,
-      plan:         (profile.plan as string) ?? 'free',
-      words_used:   (profile.words_used as number) ?? 0,
-      words_limit:  (profile.words_limit as number) ?? 5000,
-      scans_used:   (profile.scans_used as number) ?? 0,
-      scans_limit:  (profile.scans_limit as number) ?? 10,
-      is_admin:     (profile.is_admin as boolean) ?? false,
-      is_unlimited: (profile.is_unlimited as boolean) ?? false,
-      created_at:   authUser.created_at,
-      scans:        userScans,
-      transactions: userTxns,
-      total_scans:  userScans.length,
-      total_spent:  userTxns.filter(t => t.status === 'success').reduce((s, t) => s + Number(t.amount), 0),
+      id:           au.id,
+      email:        au.email ?? String(p.email ?? ''),
+      full_name:    String(p.full_name ?? au.user_metadata?.full_name ?? ''),
+      avatar_url:   String(p.avatar_url ?? au.user_metadata?.avatar_url ?? ''),
+      plan:         String(p.plan         ?? 'free'),
+      words_used:   Number(p.words_used   ?? 0),
+      words_limit:  Number(p.words_limit  ?? 5000),
+      scans_used:   Number(p.scans_used   ?? 0),
+      scans_limit:  Number(p.scans_limit  ?? 10),
+      is_admin:     Boolean(p.is_admin    ?? false),
+      is_unlimited: Boolean(p.is_unlimited ?? false),
+      created_at:   au.created_at,
+      scans:        s,
+      transactions: tx,
+      total_scans:  s.length,
+      total_spent:  tx.filter(t => t.status === 'success').reduce((sum, t) => sum + Number(t.amount), 0),
     }
-  })
-
-  // Sort newest first
-  enriched.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   return NextResponse.json(enriched)
 }
@@ -152,7 +110,7 @@ export async function PATCH(req: NextRequest) {
     extra.scans_limit = 999_999_999
   }
 
-  const { error } = await adminClient()
+  const { error } = await adminDb()
     .from('profiles')
     .update({ ...updates, ...extra, updated_at: new Date().toISOString() })
     .eq('id', userId)
@@ -168,7 +126,7 @@ export async function DELETE(req: NextRequest) {
   const { userId } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
 
-  const { error } = await adminClient().from('profiles').delete().eq('id', userId)
+  const { error } = await adminDb().from('profiles').delete().eq('id', userId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
