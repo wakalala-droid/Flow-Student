@@ -14,7 +14,7 @@ function makeAnonClient() {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (toSet) => { try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {} },
+        setAll: (toSet: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) => { try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {} },
       },
     }
   )
@@ -29,7 +29,7 @@ function makeServiceClient() {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (toSet) => { try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {} },
+        setAll: (toSet: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) => { try { toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {} },
       },
       auth: {
         autoRefreshToken: false,
