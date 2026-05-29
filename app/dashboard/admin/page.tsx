@@ -43,8 +43,7 @@ export default function AdminPage() {
   const [tab,         setTab]         = useState<Tab>('overview')
   const [planFilter,  setPlanFilter]  = useState<PlanFilter>('all')
   const [search,      setSearch]      = useState('')
-  const [debouncedQ,  setDebouncedQ]  = useState('')
-  const [users,       setUsers]       = useState<UserRow[]>([])
+  const [allUsers,    setAllUsers]    = useState<UserRow[]>([])  // full unfiltered list
   const [allTxns,     setAllTxns]     = useState<TxRow[]>([])
   const [loading,     setLoading]     = useState(true)
   const [usersLoad,   setUsersLoad]   = useState(false)
@@ -58,10 +57,27 @@ export default function AdminPage() {
   const [upgCycle,    setUpgCycle]    = useState<'monthly'|'yearly'>('monthly')
   const [upgrading,   setUpgrading]   = useState(false)
 
-  useEffect(() => { const t = setTimeout(() => setDebouncedQ(search), 400); return () => clearTimeout(t) }, [search])
-  useEffect(() => { if (isAdmin) fetchUsers() }, [debouncedQ, planFilter, isAdmin])
+  // Client-side filter — no extra API calls when searching
+  const users = allUsers.filter(u => {
+    const q = search.trim().toLowerCase()
+    const matchSearch = !q || u.email?.toLowerCase().includes(q) || (u.full_name?.toLowerCase() ?? '').includes(q)
+    const matchPlan   = planFilter === 'all' || u.plan === planFilter
+    return matchSearch && matchPlan
+  })
 
   function toast_(msg: string, ok = true) { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500) }
+
+  // Fetch ALL users once — no filters sent to server
+  const fetchUsers = useCallback(async () => {
+    setUsersLoad(true); setError('')
+    try {
+      const res  = await fetch('/api/admin/users')
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? 'Failed to load users'); setAllUsers([]); return }
+      setAllUsers(Array.isArray(data) ? data : [])
+    } catch { setError('Network error — could not load users') }
+    finally { setUsersLoad(false) }
+  }, [])
 
   async function init() {
     setLoading(true); setError('')
@@ -69,25 +85,15 @@ export default function AdminPage() {
       const ck = await fetch('/api/admin/check').then(r => r.json())
       if (!ck.isAdmin) { setIsAdmin(false); setLoading(false); return }
       setIsAdmin(true)
-      const { data } = await supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(500)
-      setAllTxns(data ?? [])
+      // Load users and payments in parallel
+      const [, txRes] = await Promise.all([
+        fetchUsers(),
+        supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(500)
+      ])
+      setAllTxns(txRes.data ?? [])
     } catch { setError('Could not connect. Check your network.') }
     finally { setLoading(false) }
   }
-
-  const fetchUsers = useCallback(async () => {
-    setUsersLoad(true); setError('')
-    try {
-      const p = new URLSearchParams()
-      if (debouncedQ)           p.set('search', debouncedQ)
-      if (planFilter !== 'all') p.set('plan',   planFilter)
-      const res  = await fetch(`/api/admin/users?${p}`)
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Failed to load users'); setUsers([]); return }
-      setUsers(Array.isArray(data) ? data : [])
-    } catch { setError('Network error — could not load users') }
-    finally { setUsersLoad(false) }
-  }, [debouncedQ, planFilter])
 
   useEffect(() => { init() }, [])
 
@@ -138,7 +144,6 @@ export default function AdminPage() {
   }
 
   // ── Derived counts ────────────────────────────────────────────────────────
-  const allUsers   = users
   const counts = {
     total:   allUsers.length,
     free:    allUsers.filter(u => u.plan === 'free').length,
@@ -147,7 +152,7 @@ export default function AdminPage() {
     team:    allUsers.filter(u => u.plan === 'team').length,
     paid:    allUsers.filter(u => u.plan !== 'free').length,
   }
-  const totalScans   = allUsers.reduce((s, u) => s + u.total_scans, 0)
+  const totalScans   = allUsers.reduce((s, u) => s + (u.total_scans ?? 0), 0)
   const totalRevenue = allTxns.filter(t => t.status === 'success').reduce((s, t) => s + Number(t.amount), 0)
 
   // ── Guards ────────────────────────────────────────────────────────────────
