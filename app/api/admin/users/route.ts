@@ -111,7 +111,7 @@ export async function GET() {
     const userTxns  = txMap[authUser.id]    ?? []
     return {
       id:           authUser.id,
-      email:        authUser.email ?? (profile.email as string) ?? '',
+      email:        authUser.email ?? ((profile as Record<string, unknown>).email as string) ?? '',
       full_name:    (profile.full_name as string) ?? authUser.user_metadata?.full_name ?? null,
       avatar_url:   (profile.avatar_url as string) ?? authUser.user_metadata?.avatar_url ?? null,
       plan:         (profile.plan as string) ?? 'free',
