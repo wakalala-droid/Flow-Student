@@ -106,7 +106,7 @@ export async function GET() {
 
   // Step 4: Merge auth users + profiles — auth is the source of truth
   const enriched = authUsers.map(authUser => {
-    const profile = profileMap[authUser.id] ?? {}
+    const profile = (profileMap[authUser.id] ?? {}) as Record<string, unknown>
     const userScans = scansMap[authUser.id] ?? []
     const userTxns  = txMap[authUser.id]    ?? []
     return {
