@@ -37,9 +37,10 @@ async function requireAdmin() {
     .from('profiles')
     .select('is_admin')
     .eq('id', user.id)
-    .single()
+    .limit(1)
 
-  return data?.is_admin === true ? user : null
+  const profile = Array.isArray(data) ? data[0] : data
+  return profile?.is_admin === true ? user : null
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {

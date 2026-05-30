@@ -35,17 +35,18 @@ export async function GET() {
     .from('profiles')
     .select('is_admin, is_unlimited, plan, words_limit, words_used')
     .eq('id', user.id)
-    .single()
+    .limit(1)
 
   if (error) return NextResponse.json({ isAdmin: false, debug: 'db error', error: error.message })
-  if (!data)  return NextResponse.json({ isAdmin: false, debug: 'no profile', userId: user.id })
+  const profile = Array.isArray(data) ? data[0] : data
+  if (!profile) return NextResponse.json({ isAdmin: false, debug: 'no profile', userId: user.id })
 
   return NextResponse.json({
-    isAdmin:     data.is_admin     ?? false,
-    isUnlimited: data.is_unlimited ?? false,
-    plan:        data.plan         ?? 'free',
-    wordsLimit:  data.words_limit  ?? 5000,
-    wordsUsed:   data.words_used   ?? 0,
+    isAdmin:     profile.is_admin     ?? false,
+    isUnlimited: profile.is_unlimited ?? false,
+    plan:        profile.plan         ?? 'free',
+    wordsLimit:  profile.words_limit  ?? 5000,
+    wordsUsed:   profile.words_used   ?? 0,
     debug:       'ok',
   })
 }
