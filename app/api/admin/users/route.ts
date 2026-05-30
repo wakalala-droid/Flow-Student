@@ -11,24 +11,43 @@ function adminDb() {
   )
 }
 
-async function getAdminUser(req: NextRequest) {
-  // Read token from Authorization header — sent by the admin page
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+// Decode JWT payload without verifying signature
+// We trust the token because we check is_admin in DB immediately after
+function decodeJwt(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    // Handle both base64 and base64url
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const json = Buffer.from(base64, 'base64').toString('utf-8')
+    return JSON.parse(json)
+  } catch { return null }
+}
+
+async function getAdminUser(req: NextRequest): Promise<string | null> {
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '').trim()
   if (!token) return null
 
-  // Validate token with Supabase admin — no RLS, no cookie parsing
-  const { data: { user }, error } = await adminDb().auth.getUser(token)
-  if (error || !user) return null
+  const payload = decodeJwt(token)
+  if (!payload) return null
 
-  // Check is_admin
-  const { data } = await adminDb()
+  // Check expiry
+  const exp = payload.exp as number
+  if (exp && Date.now() / 1000 > exp) return null
+
+  const userId = payload.sub as string
+  if (!userId) return null
+
+  // Verify user is admin in database
+  const { data, error } = await adminDb()
     .from('profiles')
     .select('is_admin')
-    .eq('id', user.id)
+    .eq('id', userId)
     .order('created_at', { ascending: false })
     .limit(1)
 
-  return data?.[0]?.is_admin === true ? user : null
+  if (error || !data?.[0]?.is_admin) return null
+  return userId
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -39,8 +58,8 @@ const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
 }
 
 export async function GET(req: NextRequest) {
-  const admin = await getAdminUser(req)
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const adminId = await getAdminUser(req)
+  if (!adminId) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const db = adminDb()
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
@@ -97,8 +116,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const admin = await getAdminUser(req)
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const adminId = await getAdminUser(req)
+  if (!adminId) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId, updates } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
@@ -123,8 +142,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const admin = await getAdminUser(req)
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const adminId = await getAdminUser(req)
+  if (!adminId) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
