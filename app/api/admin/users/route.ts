@@ -4,31 +4,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-// Only used for auth.admin.listUsers — zero RLS
 function adminDb() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-}
-
-// Exact same pattern as the working check route
-async function requireAdmin() {
-  const supabase = createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) return null
-
-  const service = createServiceClient()
-  const { data, error } = await service
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-
-  if (error || !data?.[0]?.is_admin) return null
-  return user
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -39,11 +20,34 @@ const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
 }
 
 export async function GET() {
-  const admin = await requireAdmin()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  // Step 1: get session
+  const supabase = createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) {
+    return NextResponse.json({ error: 'No session', debug: userError?.message }, { status: 403 })
+  }
 
+  // Step 2: check admin via service client
+  const service = createServiceClient()
+  const { data: profileData, error: profileError } = await service
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (profileError) {
+    return NextResponse.json({ error: 'Profile error', debug: profileError.message }, { status: 403 })
+  }
+  if (!profileData?.[0]) {
+    return NextResponse.json({ error: 'No profile found', userId: user.id }, { status: 403 })
+  }
+  if (!profileData[0].is_admin) {
+    return NextResponse.json({ error: 'Not admin', is_admin: profileData[0].is_admin }, { status: 403 })
+  }
+
+  // Step 3: fetch all users from auth.users
   const db = adminDb()
-
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
 
@@ -98,8 +102,12 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const admin = await requireAdmin()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const service = createServiceClient()
+  const { data } = await service.from('profiles').select('is_admin').eq('id', user.id).order('created_at', { ascending: false }).limit(1)
+  if (!data?.[0]?.is_admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId, updates } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
@@ -124,8 +132,12 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const admin = await requireAdmin()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const service = createServiceClient()
+  const { data } = await service.from('profiles').select('is_admin').eq('id', user.id).order('created_at', { ascending: false }).limit(1)
+  if (!data?.[0]?.is_admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
