@@ -71,7 +71,10 @@ export default function AdminPage() {
   const fetchUsers = useCallback(async () => {
     setUsersLoad(true); setError('')
     try {
-      const res  = await fetch('/api/admin/users')
+      const { data: { session } } = await supabase.auth.getSession()
+      const res  = await fetch('/api/admin/users', {
+        headers: { 'Authorization': `Bearer ${session?.access_token ?? ''}` }
+      })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Failed to load users'); setAllUsers([]); return }
       setAllUsers(Array.isArray(data) ? data : [])
@@ -99,8 +102,10 @@ export default function AdminPage() {
 
   async function patchUser(userId: string, updates: Record<string, unknown>) {
     setSaving(userId)
+    const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/admin/users', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
       body: JSON.stringify({ userId, updates }),
     })
     const d = await res.json()
@@ -110,8 +115,10 @@ export default function AdminPage() {
 
   async function resetUsage(userId: string) {
     setSaving(userId)
+    const { data: { session } } = await supabase.auth.getSession()
     await fetch('/api/admin/users', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
       body: JSON.stringify({ userId, updates: { words_used: 0, scans_used: 0 } }),
     })
     toast_('Usage reset'); await fetchUsers(); setSaving(null)
@@ -120,8 +127,10 @@ export default function AdminPage() {
   async function deleteUser(u: UserRow) {
     if (!confirm(`Delete ${u.email}? Cannot be undone.`)) return
     setSaving(u.id)
+    const { data: { session } } = await supabase.auth.getSession()
     await fetch('/api/admin/users', {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
       body: JSON.stringify({ userId: u.id }),
     })
     toast_('User deleted'); await fetchUsers(); setSaving(null)

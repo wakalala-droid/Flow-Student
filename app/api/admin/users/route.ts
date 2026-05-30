@@ -2,7 +2,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 
 function adminDb() {
   return createSupabaseClient(
@@ -12,65 +11,24 @@ function adminDb() {
   )
 }
 
-async function getAdminUser() {
-  // Read ALL cookies and find the Supabase auth token
-  const cookieStore = cookies()
-  const allCookies = cookieStore.getAll()
+async function getAdminUser(req: NextRequest) {
+  // Read token from Authorization header — sent by the admin page
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!token) return null
 
-  // Supabase stores session in sb-*-auth-token cookie (may be chunked)
-  let sessionStr = ''
-  const chunks: Record<number, string> = {}
-  let isChunked = false
-
-  for (const c of allCookies) {
-    if (c.name.includes('auth-token.')) {
-      // Chunked cookie
-      const idx = parseInt(c.name.split('.').pop() ?? '0')
-      chunks[idx] = c.value
-      isChunked = true
-    } else if (c.name.includes('auth-token')) {
-      sessionStr = c.value
-    }
-  }
-
-  if (isChunked) {
-    const keys = Object.keys(chunks).map(Number).sort((a, b) => a - b)
-    sessionStr = keys.map(k => chunks[k]).join('')
-  }
-
-  if (!sessionStr) return { user: null, error: 'no auth cookie found' }
-
-  // Decode — may be base64 or JSON
-  let parsed: { access_token?: string } | null = null
-  try {
-    // Try direct JSON first
-    parsed = JSON.parse(sessionStr)
-  } catch {
-    try {
-      // Try base64 decode
-      parsed = JSON.parse(Buffer.from(sessionStr, 'base64').toString('utf-8'))
-    } catch {
-      return { user: null, error: 'failed to parse session cookie' }
-    }
-  }
-
-  const accessToken = parsed?.access_token
-  if (!accessToken) return { user: null, error: 'no access_token in session' }
-
-  // Validate token with Supabase admin
-  const { data: { user }, error } = await adminDb().auth.getUser(accessToken)
-  if (error || !user) return { user: null, error: error?.message ?? 'invalid token' }
+  // Validate token with Supabase admin — no RLS, no cookie parsing
+  const { data: { user }, error } = await adminDb().auth.getUser(token)
+  if (error || !user) return null
 
   // Check is_admin
-  const { data: profile } = await adminDb()
+  const { data } = await adminDb()
     .from('profiles')
     .select('is_admin')
     .eq('id', user.id)
     .order('created_at', { ascending: false })
     .limit(1)
 
-  if (!profile?.[0]?.is_admin) return { user: null, error: 'not admin' }
-  return { user, error: null }
+  return data?.[0]?.is_admin === true ? user : null
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -80,9 +38,9 @@ const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
   team:    { words: 200_000, scans: 1_000 },
 }
 
-export async function GET() {
-  const { user, error: authErr } = await getAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized', reason: authErr }, { status: 403 })
+export async function GET(req: NextRequest) {
+  const admin = await getAdminUser(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const db = adminDb()
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
@@ -139,8 +97,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { user } = await getAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const admin = await getAdminUser(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId, updates } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
@@ -165,8 +123,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { user } = await getAdminUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const admin = await getAdminUser(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
