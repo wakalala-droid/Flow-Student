@@ -1,9 +1,8 @@
 // app/api/admin/users/route.ts
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 function adminDb() {
   return createSupabaseClient(
@@ -14,33 +13,34 @@ function adminDb() {
 }
 
 async function requireAdmin() {
-  // Read session cookie the same way @supabase/ssr middleware does
-  const cookieStore = cookies()
-  const sessionClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) {
-          try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {}
+  try {
+    const cookieStore = cookies()
+    const sessionClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll() },
+          setAll(s: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) {
+            try { s.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {}
+          },
         },
-      },
-    }
-  )
+      }
+    )
 
-  const { data: { user } } = await sessionClient.auth.getUser()
-  if (!user) return null
+    const { data: { user } } = await sessionClient.auth.getUser()
+    if (!user) return null
 
-  // Use raw adminDb to check is_admin — guaranteed no RLS interference
-  const { data } = await adminDb()
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .limit(1)
+    const { data } = await adminDb()
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-  const profile = Array.isArray(data) ? data[0] : data
-  return profile?.is_admin === true ? user : null
+    return data?.is_admin === true ? user : null
+  } catch { return null }
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -52,11 +52,11 @@ const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
 
 export async function GET() {
   const admin = await requireAdmin()
-  if (!admin) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const db = adminDb()
 
-  // Pull every user directly from auth.users — zero RLS
+  // Pull every user from auth.users — zero RLS
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
 
@@ -75,9 +75,15 @@ export async function GET() {
   type S  = { id: string; user_id: string; tool: string; word_count: number; created_at: string }
   type Tx = { id: string; user_id: string; amount: number; status: string; currency: string; plan: string; network: string; mobile_number: string; created_at: string }
 
-  const pMap = ((profilesRes.data ?? []) as P[]).reduce((a, p) => { a[p.id as string] = p; return a }, {} as Record<string, P>)
-  const sMap = ((scansRes.data   ?? []) as S[]).reduce((a, s) => { (a[s.user_id] ??= []).push(s); return a }, {} as Record<string, S[]>)
-  const tMap = ((txRes.data      ?? []) as Tx[]).reduce((a, t) => { (a[t.user_id] ??= []).push(t); return a }, {} as Record<string, Tx[]>)
+  // Deduplicate profiles — keep latest per user id
+  const seenIds = new Set<string>()
+  const uniqueProfiles = ((profilesRes.data ?? []) as P[])
+    .sort((a, b) => new Date(String(b.created_at)).getTime() - new Date(String(a.created_at)).getTime())
+    .filter(p => { const id = p.id as string; if (seenIds.has(id)) return false; seenIds.add(id); return true })
+
+  const pMap = uniqueProfiles.reduce((a, p) => { a[p.id as string] = p; return a }, {} as Record<string, P>)
+  const sMap = ((scansRes.data ?? []) as S[]).reduce((a, s) => { (a[s.user_id] ??= []).push(s); return a }, {} as Record<string, S[]>)
+  const tMap = ((txRes.data   ?? []) as Tx[]).reduce((a, t) => { (a[t.user_id] ??= []).push(t); return a }, {} as Record<string, Tx[]>)
 
   const result = authUsers.map(au => {
     const p  = (pMap[au.id] ?? {}) as P
@@ -108,7 +114,7 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   const admin = await requireAdmin()
-  if (!admin) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId, updates } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
@@ -134,7 +140,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const admin = await requireAdmin()
-  if (!admin) return NextResponse.json({ error: 'User not allowed' }, { status: 403 })
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const { userId } = await req.json()
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
