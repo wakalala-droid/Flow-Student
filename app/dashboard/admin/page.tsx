@@ -71,11 +71,16 @@ export default function AdminPage() {
   const fetchUsers = useCallback(async () => {
     setUsersLoad(true); setError('')
     try {
-      const res  = await fetch('/api/admin/users')
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Failed to load users'); setAllUsers([]); return }
-      setAllUsers(Array.isArray(data) ? data : [])
-    } catch { setError('Network error — could not load users') }
+      const { data, error } = await supabase.rpc('admin_get_all_users')
+      if (error) { setError(error.message); setAllUsers([]); return }
+      // Attach empty scans/transactions arrays since RPC gives aggregates only
+      const enriched = (data ?? []).map((u: UserRow) => ({
+        ...u,
+        scans: [],
+        transactions: [],
+      }))
+      setAllUsers(enriched)
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load users') }
     finally { setUsersLoad(false) }
   }, [])
 
