@@ -1,10 +1,10 @@
 // app/api/admin/users/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 
-// Pure admin client for auth.admin.listUsers and bulk queries — zero RLS
 function adminDb() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,21 +13,33 @@ function adminDb() {
   )
 }
 
-// Exact same pattern as /api/admin/check which is confirmed working
 async function requireAdmin() {
-  const supabase = createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) return null
+  // Read session cookie the same way @supabase/ssr middleware does
+  const cookieStore = cookies()
+  const sessionClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) {
+          try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {}
+        },
+      },
+    }
+  )
 
-  const service = createServiceClient()
-  const { data, error } = await service
+  const { data: { user } } = await sessionClient.auth.getUser()
+  if (!user) return null
+
+  // Use raw adminDb to check is_admin — guaranteed no RLS interference
+  const { data } = await adminDb()
     .from('profiles')
     .select('is_admin')
     .eq('id', user.id)
-    .limit(1)
+    .single()
 
-  if (error || !data?.[0]?.is_admin) return null
-  return user
+  return data?.is_admin === true ? user : null
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -43,7 +55,7 @@ export async function GET() {
 
   const db = adminDb()
 
-  // Pull all users from auth.users — bypasses RLS entirely
+  // Pull every user directly from auth.users — zero RLS
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
 
