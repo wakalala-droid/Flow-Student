@@ -1,9 +1,10 @@
 // app/api/admin/users/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+
+// Only used for auth.admin.listUsers — zero RLS
 function adminDb() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,33 +13,22 @@ function adminDb() {
   )
 }
 
+// Exact same pattern as the working check route
 async function requireAdmin() {
-  try {
-    const cookieStore = cookies()
-    const sessionClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(s: { name: string; value: string; options?: Parameters<typeof cookieStore.set>[2] }[]) {
-            try { s.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch {}
-          },
-        },
-      }
-    )
-    const { data: { user } } = await sessionClient.auth.getUser()
-    if (!user) return null
+  const supabase = createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return null
 
-    const { data } = await adminDb()
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
+  const service = createServiceClient()
+  const { data, error } = await service
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
 
-    return data?.[0]?.is_admin === true ? user : null
-  } catch { return null }
+  if (error || !data?.[0]?.is_admin) return null
+  return user
 }
 
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
@@ -72,7 +62,6 @@ export async function GET() {
   type S  = { id: string; user_id: string; tool: string; word_count: number; created_at: string }
   type Tx = { id: string; user_id: string; amount: number; status: string; currency: string; plan: string; network: string; mobile_number: string; created_at: string }
 
-  // Deduplicate profiles — one per user ID, keep newest
   const seen = new Set<string>()
   const pMap = ((profilesRes.data ?? []) as P[])
     .filter(p => { const id = p.id as string; if (seen.has(id)) return false; seen.add(id); return true })
