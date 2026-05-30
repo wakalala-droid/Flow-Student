@@ -1,6 +1,6 @@
 // app/api/admin/users/route.ts
-
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 function adminDb() {
@@ -11,19 +11,6 @@ function adminDb() {
   )
 }
 
-// Reuse the working check route by forwarding cookies
-async function isAdmin(req: NextRequest): Promise<boolean> {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-      || `https://${req.headers.get('host')}`
-    const res = await fetch(`${baseUrl}/api/admin/check`, {
-      headers: { cookie: req.headers.get('cookie') ?? '' },
-    })
-    const data = await res.json()
-    return data?.isAdmin === true
-  } catch { return false }
-}
-
 const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
   free:    { words: 5_000,   scans: 10    },
   student: { words: 20_000,  scans: 50    },
@@ -31,14 +18,25 @@ const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
   team:    { words: 200_000, scans: 1_000 },
 }
 
-export async function GET(req: NextRequest) {
-  if (!await isAdmin(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-  }
+// Identical auth pattern to the working check route
+async function checkAdmin() {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  const service = createServiceClient()
+  const { data } = await service
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .limit(1)
+  return data?.[0]?.is_admin === true
+}
+
+export async function GET() {
+  const ok = await checkAdmin()
+  if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const db = adminDb()
-
-  // Pull every user directly from auth.users — no RLS
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
 
@@ -47,7 +45,7 @@ export async function GET(req: NextRequest) {
 
   const ids = authUsers.map(u => u.id)
 
-  const [profilesRes, scansRes, txRes] = await Promise.all([
+  const [pr, sr, tr] = await Promise.all([
     db.from('profiles').select('*').in('id', ids).order('created_at', { ascending: false }),
     db.from('ai_scans').select('id,user_id,tool,word_count,created_at').in('user_id', ids).order('created_at', { ascending: false }).limit(5000),
     db.from('payment_transactions').select('id,user_id,amount,currency,plan,status,network,mobile_number,created_at').in('user_id', ids),
@@ -58,34 +56,33 @@ export async function GET(req: NextRequest) {
   type Tx = { id: string; user_id: string; amount: number; status: string; currency: string; plan: string; network: string; mobile_number: string; created_at: string }
 
   const seen = new Set<string>()
-  const pMap = ((profilesRes.data ?? []) as P[])
+  const pMap = ((pr.data ?? []) as P[])
     .filter(p => { const id = p.id as string; if (seen.has(id)) return false; seen.add(id); return true })
     .reduce((a, p) => { a[p.id as string] = p; return a }, {} as Record<string, P>)
-
-  const sMap = ((scansRes.data ?? []) as S[]).reduce((a, s) => { (a[s.user_id] ??= []).push(s); return a }, {} as Record<string, S[]>)
-  const tMap = ((txRes.data   ?? []) as Tx[]).reduce((a, t) => { (a[t.user_id] ??= []).push(t); return a }, {} as Record<string, Tx[]>)
+  const sMap = ((sr.data ?? []) as S[]).reduce((a, s) => { (a[s.user_id] ??= []).push(s); return a }, {} as Record<string, S[]>)
+  const tMap = ((tr.data ?? []) as Tx[]).reduce((a, t) => { (a[t.user_id] ??= []).push(t); return a }, {} as Record<string, Tx[]>)
 
   const result = authUsers.map(au => {
-    const p  = (pMap[au.id] ?? {}) as P
-    const s  = sMap[au.id] ?? []
+    const p = (pMap[au.id] ?? {}) as P
+    const s = sMap[au.id] ?? []
     const tx = tMap[au.id] ?? []
     return {
-      id:           au.id,
-      email:        au.email ?? String(p.email ?? ''),
-      full_name:    String(p.full_name   ?? (au.user_metadata?.full_name  ?? '')),
-      avatar_url:   String(p.avatar_url  ?? (au.user_metadata?.avatar_url ?? '')),
-      plan:         String(p.plan        ?? 'free'),
-      words_used:   Number(p.words_used  ?? 0),
-      words_limit:  Number(p.words_limit ?? 5000),
-      scans_used:   Number(p.scans_used  ?? 0),
-      scans_limit:  Number(p.scans_limit ?? 10),
-      is_admin:     Boolean(p.is_admin     ?? false),
+      id: au.id,
+      email: au.email ?? String(p.email ?? ''),
+      full_name: String(p.full_name ?? au.user_metadata?.full_name ?? ''),
+      avatar_url: String(p.avatar_url ?? au.user_metadata?.avatar_url ?? ''),
+      plan: String(p.plan ?? 'free'),
+      words_used: Number(p.words_used ?? 0),
+      words_limit: Number(p.words_limit ?? 5000),
+      scans_used: Number(p.scans_used ?? 0),
+      scans_limit: Number(p.scans_limit ?? 10),
+      is_admin: Boolean(p.is_admin ?? false),
       is_unlimited: Boolean(p.is_unlimited ?? false),
-      created_at:   au.created_at,
-      scans:        s,
+      created_at: au.created_at,
+      scans: s,
       transactions: tx,
-      total_scans:  s.length,
-      total_spent:  tx.filter(t => t.status === 'success').reduce((sum, t) => sum + Number(t.amount), 0),
+      total_scans: s.length,
+      total_spent: tx.filter(t => t.status === 'success').reduce((sum, t) => sum + Number(t.amount), 0),
     }
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
@@ -93,36 +90,24 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!await isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-
+  const ok = await checkAdmin()
+  if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   const { userId, updates } = await req.json()
-  if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
-
   const extra: Record<string, unknown> = {}
   if (updates.plan && PLAN_LIMITS[updates.plan]) {
     extra.words_limit = PLAN_LIMITS[updates.plan].words
     extra.scans_limit = PLAN_LIMITS[updates.plan].scans
   }
-  if (updates.is_unlimited === true) {
-    extra.words_limit = 999_999_999
-    extra.scans_limit = 999_999_999
-  }
-
-  const { error } = await adminDb()
-    .from('profiles')
-    .update({ ...updates, ...extra, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-
+  if (updates.is_unlimited === true) { extra.words_limit = 999999999; extra.scans_limit = 999999999 }
+  const { error } = await adminDb().from('profiles').update({ ...updates, ...extra, updated_at: new Date().toISOString() }).eq('id', userId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!await isAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-
+  const ok = await checkAdmin()
+  if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   const { userId } = await req.json()
-  if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
-
   const { error } = await adminDb().from('profiles').delete().eq('id', userId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
