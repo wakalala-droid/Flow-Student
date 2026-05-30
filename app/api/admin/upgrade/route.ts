@@ -1,7 +1,23 @@
-// app/api/admin/users/route.ts  — replace your existing file
+// app/api/admin/upgrade/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+
+function adminDb() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
+  free:    { words: 5_000,   scans: 10    },
+  student: { words: 20_000,  scans: 50    },
+  pro:     { words: 50_000,  scans: 200   },
+  team:    { words: 200_000, scans: 1_000 },
+}
 
 async function checkAdmin() {
   try {
@@ -13,94 +29,74 @@ async function checkAdmin() {
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
-      .single()
-    return data?.is_admin ? user : null
-  } catch {
-    return null
-  }
+      .limit(1)
+    return data?.[0]?.is_admin === true ? user : null
+  } catch { return null }
 }
 
-// GET /api/admin/users?search=john&plan=free&limit=500
-export async function GET(req: NextRequest) {
-  const admin = await checkAdmin()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+export async function POST(req: NextRequest) {
+  try {
+    const admin = await checkAdmin()
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
-  const { searchParams } = new URL(req.url)
-  const search = searchParams.get('search') ?? ''
-  const plan   = searchParams.get('plan')   ?? ''
-  const limit  = Math.min(parseInt(searchParams.get('limit') ?? '500'), 1000)
+    const body = await req.json()
+    const { userId, plan, billingCycle = 'monthly' } = body
 
-  const service = createServiceClient()
+    if (!userId || !plan) {
+      return NextResponse.json({ error: 'userId and plan are required' }, { status: 400 })
+    }
 
-  let query = service
-    .from('profiles')
-    .select('id, email, full_name, avatar_url, plan, words_used, words_limit, scans_used, scans_limit, is_admin, is_unlimited, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .limit(limit)
+    if (!PLAN_LIMITS[plan]) {
+      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+    }
 
-  // Server-side plan filter
-  if (plan && plan !== 'all') {
-    query = query.eq('plan', plan)
+    const limits = PLAN_LIMITS[plan]
+    const db = adminDb()
+
+    // Update profile
+    const { error: profileError } = await db
+      .from('profiles')
+      .update({
+        plan,
+        words_limit:  limits.words,
+        scans_limit:  limits.scans,
+        updated_at:   new Date().toISOString(),
+      })
+      .eq('id', userId)
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 })
+    }
+
+    // Upsert subscription
+    const periodEnd = new Date()
+    billingCycle === 'yearly'
+      ? periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+      : periodEnd.setMonth(periodEnd.getMonth() + 1)
+
+    await db.from('subscriptions').upsert(
+      {
+        user_id:              userId,
+        plan,
+        status:               'active',
+        payment_method:       'manual',
+        amount:               0,
+        currency:             'ZMW',
+        billing_cycle:        billingCycle,
+        current_period_start: new Date().toISOString(),
+        current_period_end:   periodEnd.toISOString(),
+        flutterwave_tx_ref:   `MANUAL-${admin.id}-${Date.now()}`,
+        updated_at:           new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    )
+
+    return NextResponse.json({ ok: true, plan, limits })
+  } catch (e: unknown) {
+    console.error('[admin/upgrade] error:', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Server error' },
+      { status: 500 }
+    )
   }
-
-  // Server-side search (email OR name)
-  if (search) {
-    query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    console.error('Admin users fetch error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json(data ?? [])
-}
-
-export async function PATCH(req: NextRequest) {
-  const admin = await checkAdmin()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-
-  const { userId, updates } = await req.json()
-  if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
-
-  const PLAN_LIMITS: Record<string, { words: number; scans: number }> = {
-    free:    { words: 5_000,   scans: 10  },
-    student: { words: 20_000,  scans: 50  },
-    pro:     { words: 50_000,  scans: 200 },
-    team:    { words: 200_000, scans: 1_000 },
-  }
-
-  const extra: Record<string, unknown> = {}
-  if (updates.plan && PLAN_LIMITS[updates.plan]) {
-    extra.words_limit = PLAN_LIMITS[updates.plan].words
-    extra.scans_limit = PLAN_LIMITS[updates.plan].scans
-  }
-  if (updates.is_unlimited) {
-    extra.words_limit = 999_999_999
-    extra.scans_limit = 999_999_999
-  }
-
-  const service = createServiceClient()
-  const { error } = await service
-    .from('profiles')
-    .update({ ...updates, ...extra, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
-}
-
-export async function DELETE(req: NextRequest) {
-  const admin = await checkAdmin()
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-
-  const { userId } = await req.json()
-  if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
-
-  const service = createServiceClient()
-  const { error } = await service.from('profiles').delete().eq('id', userId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
 }
