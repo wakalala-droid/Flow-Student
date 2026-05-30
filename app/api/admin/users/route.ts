@@ -27,7 +27,6 @@ async function requireAdmin() {
         },
       }
     )
-
     const { data: { user } } = await sessionClient.auth.getUser()
     if (!user) return null
 
@@ -37,9 +36,8 @@ async function requireAdmin() {
       .eq('id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
 
-    return data?.is_admin === true ? user : null
+    return data?.[0]?.is_admin === true ? user : null
   } catch { return null }
 }
 
@@ -56,7 +54,6 @@ export async function GET() {
 
   const db = adminDb()
 
-  // Pull every user from auth.users — zero RLS
   const { data: authData, error: authError } = await db.auth.admin.listUsers({ perPage: 1000 })
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 })
 
@@ -66,7 +63,7 @@ export async function GET() {
   const ids = authUsers.map(u => u.id)
 
   const [profilesRes, scansRes, txRes] = await Promise.all([
-    db.from('profiles').select('*').in('id', ids),
+    db.from('profiles').select('*').in('id', ids).order('created_at', { ascending: false }),
     db.from('ai_scans').select('id,user_id,tool,word_count,created_at').in('user_id', ids).order('created_at', { ascending: false }).limit(5000),
     db.from('payment_transactions').select('id,user_id,amount,currency,plan,status,network,mobile_number,created_at').in('user_id', ids),
   ])
@@ -75,13 +72,12 @@ export async function GET() {
   type S  = { id: string; user_id: string; tool: string; word_count: number; created_at: string }
   type Tx = { id: string; user_id: string; amount: number; status: string; currency: string; plan: string; network: string; mobile_number: string; created_at: string }
 
-  // Deduplicate profiles — keep latest per user id
-  const seenIds = new Set<string>()
-  const uniqueProfiles = ((profilesRes.data ?? []) as P[])
-    .sort((a, b) => new Date(String(b.created_at)).getTime() - new Date(String(a.created_at)).getTime())
-    .filter(p => { const id = p.id as string; if (seenIds.has(id)) return false; seenIds.add(id); return true })
+  // Deduplicate profiles — one per user ID, keep newest
+  const seen = new Set<string>()
+  const pMap = ((profilesRes.data ?? []) as P[])
+    .filter(p => { const id = p.id as string; if (seen.has(id)) return false; seen.add(id); return true })
+    .reduce((a, p) => { a[p.id as string] = p; return a }, {} as Record<string, P>)
 
-  const pMap = uniqueProfiles.reduce((a, p) => { a[p.id as string] = p; return a }, {} as Record<string, P>)
   const sMap = ((scansRes.data ?? []) as S[]).reduce((a, s) => { (a[s.user_id] ??= []).push(s); return a }, {} as Record<string, S[]>)
   const tMap = ((txRes.data   ?? []) as Tx[]).reduce((a, t) => { (a[t.user_id] ??= []).push(t); return a }, {} as Record<string, Tx[]>)
 

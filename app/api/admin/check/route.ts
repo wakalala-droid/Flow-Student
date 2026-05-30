@@ -31,24 +31,23 @@ export async function GET() {
     const { data: { user } } = await sessionClient.auth.getUser()
     if (!user) return NextResponse.json({ isAdmin: false, debug: 'no session' })
 
-    // Use maybeSingle to handle 0 or 1 rows safely
     const { data, error } = await adminDb()
       .from('profiles')
       .select('is_admin, is_unlimited, plan, words_limit, words_used')
       .eq('id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
 
     if (error) return NextResponse.json({ isAdmin: false, debug: 'db error', error: error.message })
-    if (!data)  return NextResponse.json({ isAdmin: false, debug: 'no profile', userId: user.id })
+    const profile = data?.[0]
+    if (!profile) return NextResponse.json({ isAdmin: false, debug: 'no profile' })
 
     return NextResponse.json({
-      isAdmin:     data.is_admin     ?? false,
-      isUnlimited: data.is_unlimited ?? false,
-      plan:        data.plan         ?? 'free',
-      wordsLimit:  data.words_limit  ?? 5000,
-      wordsUsed:   data.words_used   ?? 0,
+      isAdmin:     profile.is_admin     ?? false,
+      isUnlimited: profile.is_unlimited ?? false,
+      plan:        profile.plan         ?? 'free',
+      wordsLimit:  profile.words_limit  ?? 5000,
+      wordsUsed:   profile.words_used   ?? 0,
       debug:       'ok',
     })
   } catch (e: unknown) {
