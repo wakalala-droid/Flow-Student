@@ -4,6 +4,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import MobileSidebar from '@/components/layout/MobileSidebar'
 import MobileBottomNav from '@/components/layout/MobileBottomNav'
+import UpgradeNotification from '@/components/shared/UpgradeNotification'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -15,6 +16,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#0a0a0f]">
+      {/* Upgrade notification popup — shows once after admin upgrades account */}
+      <UpgradeNotification />
+
       {/* Desktop sidebar — hidden on mobile */}
       <div className="hidden lg:flex">
         <Sidebar profile={profile} />

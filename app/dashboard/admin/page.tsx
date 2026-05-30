@@ -136,15 +136,17 @@ export default function AdminPage() {
     if (!upgradeUser) return
     setUpgrading(true)
     try {
-      const res = await fetch('/api/admin/upgrade', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: upgradeUser.id, plan: upgradePlan, billingCycle: upgCycle }),
+      const { data, error } = await supabase.rpc('admin_upgrade_user', {
+        target_user_id: upgradeUser.id,
+        new_plan:       upgradePlan,
+        billing_cycle:  upgCycle,
       })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error)
-      toast_(`✅ ${upgradeUser.email} → ${upgradePlan.toUpperCase()}`)
-      setUpgradeUser(null); await fetchUsers()
-    } catch(e: unknown) { toast_(e instanceof Error ? e.message : 'Failed', false) }
+      if (error) throw new Error(error.message)
+      if (data && !data.ok) throw new Error(data.error ?? 'Upgrade failed')
+      toast_(`✅ ${upgradeUser.email} upgraded to ${upgradePlan.toUpperCase()}!`)
+      setUpgradeUser(null)
+      await fetchUsers()
+    } catch(e: unknown) { toast_(e instanceof Error ? e.message : 'Upgrade failed', false) }
     finally { setUpgrading(false) }
   }
 
