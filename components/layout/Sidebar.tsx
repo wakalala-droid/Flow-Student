@@ -13,203 +13,182 @@ const NAV_EXTRAS = [
   { href:'/dashboard/settings',  iconKey:'settings',  label:'Settings'  },
 ]
 
-// ─── Intelligence Wave — cinematic crossing ribbons ───────────────────────────
-function IntelligenceWave() {
+// Two intertwined ribbons flowing LEFT→RIGHT, matching the 4th UI exactly
+function FlowWave() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    const W = canvas.width = 248
-    const H = canvas.height = 110
-    let frame = 0
-    let raf: number
+    const W = 248, H = 90
+    canvas.width  = W
+    canvas.height = H
+    let frame = 0, raf: number
+
+    // Ribbon A: starts mid → peaks at top-left → crosses mid → troughs at bottom-right → ends mid
+    // Ribbon B: starts mid → troughs at bottom-left → crosses mid → peaks at top-right → ends mid
+    // They share the same mid-points (crossings) at x=0, x=W/2, x=W
+
+    function ribbonY(x: number, peakY: number, troughY: number, phase: number): number {
+      // Full sine cycle across width, phase shifts which ribbon is up/down
+      return ((peakY + troughY) / 2) + ((troughY - peakY) / 2) * Math.sin((x / W) * Math.PI * 2 + phase)
+    }
 
     function draw() {
       ctx.clearRect(0, 0, W, H)
+      const t = frame * 0.006
+      const mid = H * 0.5
 
-      const t = frame * 0.008
+      // Subtle breathing animation — peaks/troughs shift slightly
+      const peakA  = H * 0.18 + Math.sin(t * 0.8) * 3
+      const troughA = H * 0.82 - Math.sin(t * 0.8) * 3
+      const peakB  = H * 0.82 - Math.sin(t * 0.8) * 3
+      const troughB = H * 0.18 + Math.sin(t * 0.8) * 3
 
-      // ── Upper ribbon bundle: enters top-left, curves down to cross at center ──
-      // ── Lower ribbon bundle: enters bottom-left, curves up to cross at center ─
-      // Cross point ~(W*0.44, H*0.5)
-      const cx = W * 0.44
-      const cy = H * 0.50
-
-      // Generate fine parallel strands for each side of the crossing
-      // Each strand is a cubic bezier
-
-      function drawBundle(
-        strands: number,
-        // Left side control points (before cross)
-        x0: number, y0base: number, y0spread: number,
-        cp1x: number, cp1ybase: number, cp1yspread: number,
-        cp2x: number, cp2ybase: number, cp2yspread: number,
-        // End at crossing
-        colorA: string, colorB: string,
-        widthBase: number, alphaBase: number,
-        phase: number
+      // Draw strands for one ribbon
+      function drawRibbon(
+        peakY: number, troughY: number,
+        phase: number, strandCount: number,
+        spreadPx: number,
+        hue: string, alphaCenter: number
       ) {
-        for (let i = 0; i < strands; i++) {
-          const frac = (i / (strands - 1)) - 0.5 // -0.5 to 0.5
-          const y0   = y0base   + frac * y0spread
-          const cp1y = cp1ybase + frac * cp1yspread * 0.7
-          const cp2y = cp2ybase + frac * cp2yspread * 0.4
-          const alpha = alphaBase * (1 - 0.5 * Math.abs(frac)) * (0.85 + 0.15 * Math.sin(t + i * 0.3 + phase))
-          const w = widthBase * (1 - 0.6 * Math.abs(frac))
+        for (let s = 0; s < strandCount; s++) {
+          // offset: -spread/2 to +spread/2
+          const offset = ((s / (strandCount - 1)) - 0.5) * spreadPx
+          const distFromCenter = Math.abs((s / (strandCount - 1)) - 0.5) * 2 // 0=center, 1=edge
 
-          const grad = ctx.createLinearGradient(x0, y0, cx, cy)
-          grad.addColorStop(0, colorA.replace('A', String(alpha * 0.3)))
-          grad.addColorStop(0.6, colorB.replace('A', String(alpha * 0.8)))
-          grad.addColorStop(1, `rgba(220,200,255,${alpha})`)
+          // Center strands brighter and slightly thicker
+          const alpha = alphaCenter * (1 - distFromCenter * 0.65) * (0.88 + 0.12 * Math.sin(t + s * 0.4))
+          const width = (1 - distFromCenter * 0.7) * 1.1
 
+          // Build path point by point
           ctx.beginPath()
-          ctx.moveTo(x0, y0)
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, cx, cy)
+          for (let xi = 0; xi <= W; xi += 2) {
+            const y = ribbonY(xi, peakY, troughY, phase) + offset
+            if (xi === 0) ctx.moveTo(xi, y)
+            else ctx.lineTo(xi, y)
+          }
+
+          // Gradient along path from left to right
+          const grad = ctx.createLinearGradient(0, 0, W, 0)
+          grad.addColorStop(0,    `${hue.replace('A', String(alpha * 0.2))}`)
+          grad.addColorStop(0.15, `${hue.replace('A', String(alpha * 0.85))}`)
+          grad.addColorStop(0.5,  `${hue.replace('A', String(alpha))}`)
+          grad.addColorStop(0.85, `${hue.replace('A', String(alpha * 0.85))}`)
+          grad.addColorStop(1,    `${hue.replace('A', String(alpha * 0.2))}`)
+
           ctx.strokeStyle = grad
-          ctx.lineWidth = w
+          ctx.lineWidth   = width
           ctx.stroke()
         }
       }
 
-      function drawBundleRight(
-        strands: number,
-        cp1x: number, cp1ybase: number, cp1yspread: number,
-        cp2x: number, cp2ybase: number, cp2yspread: number,
-        x1: number, y1base: number, y1spread: number,
-        colorA: string, colorB: string,
-        widthBase: number, alphaBase: number,
-        phase: number
-      ) {
-        for (let i = 0; i < strands; i++) {
-          const frac = (i / (strands - 1)) - 0.5
-          const y1   = y1base + frac * y1spread
-          const cp1y = cp1ybase + frac * cp1yspread * 0.4
-          const cp2y = cp2ybase + frac * cp2yspread * 0.7
-          const alpha = alphaBase * (1 - 0.5 * Math.abs(frac)) * (0.85 + 0.15 * Math.sin(t + i * 0.3 + phase))
-          const w = widthBase * (1 - 0.6 * Math.abs(frac))
-
-          const grad = ctx.createLinearGradient(cx, cy, x1, y1)
-          grad.addColorStop(0, `rgba(220,200,255,${alpha})`)
-          grad.addColorStop(0.4, colorA.replace('A', String(alpha * 0.8)))
-          grad.addColorStop(1, colorB.replace('A', String(alpha * 0.25)))
-
-          ctx.beginPath()
-          ctx.moveTo(cx, cy)
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x1, y1)
-          ctx.strokeStyle = grad
-          ctx.lineWidth = w
-          ctx.stroke()
-        }
-      }
-
+      // Ribbon A — bright violet (#B388FF family)
       ctx.save()
-      ctx.globalCompositeOperation = 'screen'
-
-      // === PRE-CROSS: Upper-left bundle (enters from top-left, comes DOWN to cx,cy) ===
-      drawBundle(18,
-        -8, 18, 28,          // start: x0, y0=18 ±14
-        W*0.18, 25, 22,      // cp1
-        W*0.34, 38, 14,      // cp2
-        'rgba(90,69,255,A)', 'rgba(124,92,255,A)',
-        1.0, 0.85, 0
-      )
-
-      // === PRE-CROSS: Lower-left bundle (enters from bottom-left, comes UP to cx,cy) ===
-      drawBundle(18,
-        -8, 88, 28,
-        W*0.18, 82, 22,
-        W*0.34, 66, 14,
-        'rgba(53,38,168,A)', 'rgba(90,69,255,A)',
-        0.9, 0.8, 1.2
-      )
-
-      // === POST-CROSS: Upper-right bundle (leaves cx,cy going DOWN to bottom-right) ===
-      drawBundleRight(18,
-        W*0.55, 58, 14,
-        W*0.74, 72, 22,
-        W+8, 80, 30,
-        'rgba(124,92,255,A)', 'rgba(90,69,255,A)',
-        0.9, 0.8, 2.1
-      )
-
-      // === POST-CROSS: Lower-right bundle (leaves cx,cy going UP to top-right) ===
-      drawBundleRight(18,
-        W*0.55, 42, 14,
-        W*0.74, 32, 22,
-        W+8, 22, 28,
-        'rgba(179,136,255,A)', 'rgba(124,92,255,A)',
-        1.0, 0.85, 0.9
-      )
-
+      ctx.shadowBlur   = 6
+      ctx.shadowColor  = 'rgba(179,136,255,0.5)'
+      drawRibbon(peakA, troughA, 0, 16, 16, 'rgba(179,136,255,A)', 0.85)
       ctx.restore()
 
-      // === ATMOSPHERE: volumetric glow blobs ===
-      const atmGrad1 = ctx.createRadialGradient(cx*0.45, H*0.4, 0, cx*0.45, H*0.4, 55)
-      atmGrad1.addColorStop(0, `rgba(90,69,255,${0.10 + 0.03*Math.sin(t)})`)
-      atmGrad1.addColorStop(1, 'rgba(90,69,255,0)')
-      ctx.fillStyle = atmGrad1
-      ctx.fillRect(0,0,W,H)
+      // Ribbon B — deeper purple (#7C5CFF family), inverted phase
+      ctx.save()
+      ctx.shadowBlur   = 6
+      ctx.shadowColor  = 'rgba(124,92,255,0.5)'
+      drawRibbon(peakB, troughB, 0, 16, 16, 'rgba(124,92,255,A)', 0.75)
+      ctx.restore()
 
-      const atmGrad2 = ctx.createRadialGradient(W*0.72, H*0.55, 0, W*0.72, H*0.55, 48)
-      atmGrad2.addColorStop(0, `rgba(124,92,255,${0.09 + 0.03*Math.sin(t*1.3)})`)
-      atmGrad2.addColorStop(1, 'rgba(124,92,255,0)')
-      ctx.fillStyle = atmGrad2
-      ctx.fillRect(0,0,W,H)
-
-      // === CROSSING POINT: super-bright white bloom ===
-      const pulse = 0.85 + 0.15 * Math.sin(t * 2.5)
-      const crossGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 18)
-      crossGrad.addColorStop(0, `rgba(255,255,255,${0.92 * pulse})`)
-      crossGrad.addColorStop(0.3, `rgba(220,200,255,${0.6 * pulse})`)
-      crossGrad.addColorStop(0.6, `rgba(179,136,255,${0.3 * pulse})`)
-      crossGrad.addColorStop(1, 'rgba(124,92,255,0)')
-      ctx.globalCompositeOperation = 'screen'
-      ctx.fillStyle = crossGrad
+      // Thin bright accent strand on Ribbon A (the single brightest centre line)
+      ctx.save()
+      ctx.shadowBlur  = 10
+      ctx.shadowColor = 'rgba(220,200,255,0.8)'
       ctx.beginPath()
-      ctx.arc(cx, cy, 18, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.globalCompositeOperation = 'source-over'
+      for (let xi = 0; xi <= W; xi += 2) {
+        const y = ribbonY(xi, peakA, troughA, 0)
+        if (xi === 0) ctx.moveTo(xi, y); else ctx.lineTo(xi, y)
+      }
+      const accentGrad = ctx.createLinearGradient(0,0,W,0)
+      accentGrad.addColorStop(0,   'rgba(220,200,255,0)')
+      accentGrad.addColorStop(0.2, 'rgba(220,200,255,0.8)')
+      accentGrad.addColorStop(0.5, 'rgba(255,255,255,0.9)')
+      accentGrad.addColorStop(0.8, 'rgba(220,200,255,0.8)')
+      accentGrad.addColorStop(1,   'rgba(220,200,255,0)')
+      ctx.strokeStyle = accentGrad
+      ctx.lineWidth   = 0.8
+      ctx.stroke()
+      ctx.restore()
 
-      // === PARTICLES: intelligent dust ===
-      const particles = [
-        [14,32],[38,22],[62,42],[88,18],[115,30],[138,64],[162,28],
-        [185,48],[208,22],[228,38],[242,56],[30,70],[72,80],[98,58],
-        [155,72],[190,66],[220,50],[18,55],[52,60],[175,34],
+      // Thin bright accent on Ribbon B
+      ctx.save()
+      ctx.shadowBlur  = 10
+      ctx.shadowColor = 'rgba(179,136,255,0.8)'
+      ctx.beginPath()
+      for (let xi = 0; xi <= W; xi += 2) {
+        const y = ribbonY(xi, peakB, troughB, 0)
+        if (xi === 0) ctx.moveTo(xi, y); else ctx.lineTo(xi, y)
+      }
+      const accent2 = ctx.createLinearGradient(0,0,W,0)
+      accent2.addColorStop(0,   'rgba(179,136,255,0)')
+      accent2.addColorStop(0.2, 'rgba(179,136,255,0.7)')
+      accent2.addColorStop(0.5, 'rgba(220,200,255,0.85)')
+      accent2.addColorStop(0.8, 'rgba(179,136,255,0.7)')
+      accent2.addColorStop(1,   'rgba(179,136,255,0)')
+      ctx.strokeStyle = accent2
+      ctx.lineWidth   = 0.8
+      ctx.stroke()
+      ctx.restore()
+
+      // Crossing glow — SUBTLE, at x=W/2 where ribbons cross mid
+      const crossX = W / 2
+      const crossGrad = ctx.createRadialGradient(crossX, mid, 0, crossX, mid, 14)
+      crossGrad.addColorStop(0,   `rgba(220,200,255,${0.18 + 0.06*Math.sin(t*2)})`)
+      crossGrad.addColorStop(0.5, `rgba(179,136,255,${0.08 + 0.03*Math.sin(t*2)})`)
+      crossGrad.addColorStop(1,   'rgba(124,92,255,0)')
+      ctx.fillStyle = crossGrad
+      ctx.fillRect(0,0,W,H)
+
+      // Particles — small, sparse, elegant
+      const pts = [
+        [28,30],[55,62],[88,20],[108,48],[132,68],[158,28],[185,52],[210,22],[235,60],
+        [18,52],[72,38],[148,74],[198,38],[240,44],
       ]
-      particles.forEach(([px,py],i) => {
-        const drift = Math.sin(t * 0.7 + i * 0.4) * 2
-        const alpha = 0.3 + 0.4 * Math.abs(Math.sin(t * 0.5 + i * 0.6))
-        const r = 0.6 + 0.6 * Math.abs(Math.sin(t + i * 0.9))
-        const pg = ctx.createRadialGradient(px, py + drift, 0, px, py + drift, r * 3)
-        pg.addColorStop(0, `rgba(220,200,255,${alpha})`)
+      pts.forEach(([px,py],i) => {
+        const drift = Math.sin(t*0.6 + i*0.5) * 2.5
+        const a = 0.25 + 0.35 * Math.abs(Math.sin(t*0.4 + i*0.7))
+        const r = 0.5 + 0.5 * Math.abs(Math.sin(t*0.8 + i))
+        const pg = ctx.createRadialGradient(px, py+drift, 0, px, py+drift, r*4)
+        pg.addColorStop(0, `rgba(220,200,255,${a})`)
         pg.addColorStop(1, 'rgba(179,136,255,0)')
-        ctx.globalCompositeOperation = 'screen'
         ctx.fillStyle = pg
         ctx.beginPath()
-        ctx.arc(px, py + drift, r * 3, 0, Math.PI * 2)
+        ctx.arc(px, py+drift, r*4, 0, Math.PI*2)
         ctx.fill()
       })
-      ctx.globalCompositeOperation = 'source-over'
 
-      // === EDGE FADES ===
-      // Left fade
-      const lf = ctx.createLinearGradient(0,0,28,0)
-      lf.addColorStop(0, '#0A0914'); lf.addColorStop(1, 'rgba(10,9,20,0)')
-      ctx.fillStyle = lf; ctx.fillRect(0,0,28,H)
-      // Right fade
-      const rf = ctx.createLinearGradient(W,0,W-28,0)
-      rf.addColorStop(0, '#0A0914'); rf.addColorStop(1, 'rgba(10,9,20,0)')
-      ctx.fillStyle = rf; ctx.fillRect(W-28,0,28,H)
-      // Top fade
-      const tf = ctx.createLinearGradient(0,0,0,22)
-      tf.addColorStop(0, '#0A0914'); tf.addColorStop(1, 'rgba(10,9,20,0)')
-      ctx.fillStyle = tf; ctx.fillRect(0,0,W,22)
-      // Bottom fade
-      const bf = ctx.createLinearGradient(0,H,0,H-22)
-      bf.addColorStop(0, '#0A0914'); bf.addColorStop(1, 'rgba(10,9,20,0)')
-      ctx.fillStyle = bf; ctx.fillRect(0,H-22,W,22)
+      // Atmospheric background glow (very subtle)
+      const atm = ctx.createLinearGradient(0,0,0,H)
+      atm.addColorStop(0,   'rgba(90,69,255,0)')
+      atm.addColorStop(0.5, 'rgba(90,69,255,0.04)')
+      atm.addColorStop(1,   'rgba(90,69,255,0)')
+      ctx.fillStyle = atm
+      ctx.fillRect(0,0,W,H)
+
+      // Edge fades — left, right, top, bottom
+      const lf = ctx.createLinearGradient(0,0,20,0)
+      lf.addColorStop(0,'#0A0914'); lf.addColorStop(1,'rgba(10,9,20,0)')
+      ctx.fillStyle=lf; ctx.fillRect(0,0,20,H)
+
+      const rf = ctx.createLinearGradient(W,0,W-20,0)
+      rf.addColorStop(0,'#0A0914'); rf.addColorStop(1,'rgba(10,9,20,0)')
+      ctx.fillStyle=rf; ctx.fillRect(W-20,0,20,H)
+
+      const tf = ctx.createLinearGradient(0,0,0,18)
+      tf.addColorStop(0,'#0A0914'); tf.addColorStop(1,'rgba(10,9,20,0)')
+      ctx.fillStyle=tf; ctx.fillRect(0,0,W,18)
+
+      const bf = ctx.createLinearGradient(0,H,0,H-18)
+      bf.addColorStop(0,'#0A0914'); bf.addColorStop(1,'rgba(10,9,20,0)')
+      ctx.fillStyle=bf; ctx.fillRect(0,H-18,W,18)
 
       frame++
       raf = requestAnimationFrame(draw)
@@ -219,10 +198,7 @@ function IntelligenceWave() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  return (
-    <canvas ref={canvasRef}
-      style={{ width:'100%', height:110, display:'block', flexShrink:0 }}/>
-  )
+  return <canvas ref={canvasRef} style={{ width:'100%', height:90, display:'block', flexShrink:0 }}/>
 }
 
 export default function Sidebar({ profile }: { profile: Profile | null }) {
@@ -240,7 +216,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
     const active = pathname === href
     return (
       <Link key={href} href={href} style={{
-        display:'flex', alignItems:'center', gap:14,
+        display:'flex', alignItems:'center', gap:13,
         padding:'9px 12px', borderRadius:11, textDecoration:'none',
         background: active ? danger ? 'rgba(220,38,38,0.12)' : 'rgba(92,69,255,0.16)' : 'transparent',
         border: active ? danger ? '1px solid rgba(248,113,113,0.1)' : '1px solid rgba(124,92,255,0.18)' : '1px solid transparent',
@@ -251,7 +227,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
           color: active ? danger ? '#f87171' : '#B388FF' : '#3d3d62',
           filter: active ? danger
             ? 'drop-shadow(0 0 6px rgba(248,113,113,0.65))'
-            : 'drop-shadow(0 0 8px rgba(179,136,255,0.9)) drop-shadow(0 0 16px rgba(124,92,255,0.5))'
+            : 'drop-shadow(0 0 7px rgba(179,136,255,0.9)) drop-shadow(0 0 14px rgba(124,92,255,0.5))'
             : 'none',
           transition:'all 0.15s',
         }}>
@@ -270,7 +246,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
             fontSize:9, fontWeight:700, letterSpacing:'0.06em',
             padding:'2px 6px', borderRadius:999, flexShrink:0,
             background: badge==='HOT'?'rgba(251,146,60,0.15)':badge==='ADMIN'?'rgba(220,38,38,0.15)':'rgba(52,211,153,0.1)',
-            color:       badge==='HOT'?'#fb923c':badge==='ADMIN'?'#f87171':'#34d399',
+            color: badge==='HOT'?'#fb923c':badge==='ADMIN'?'#f87171':'#34d399',
             border:`1px solid ${badge==='HOT'?'rgba(251,146,60,0.25)':badge==='ADMIN'?'rgba(248,113,113,0.2)':'rgba(52,211,153,0.18)'}`,
           }}>{badge}</span>
         )}
@@ -280,86 +256,67 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
 
   return (
     <>
-      {/* Gradient text animation */}
       <style>{`
-        @keyframes gradientShift {
-          0%   { background-position: 0% 50% }
-          50%  { background-position: 100% 50% }
-          100% { background-position: 0% 50% }
-        }
-        @keyframes taglineShimmer {
-          0%   { opacity: 0.55 }
-          50%  { opacity: 0.85 }
-          100% { opacity: 0.55 }
-        }
+        @keyframes fsGrad { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes tagPulse { 0%,100%{opacity:.55} 50%{opacity:.82} }
       `}</style>
 
       <aside style={{
         width:248, flexShrink:0, display:'flex', flexDirection:'column',
-        background:'#0A0914',
-        borderRight:'1px solid rgba(92,69,255,0.1)',
-        overflow:'hidden',
+        background:'#0A0914', borderRight:'1px solid rgba(92,69,255,0.1)', overflow:'hidden',
       }}>
 
-        {/* ── Logo + branding ───────────────────────────────────────── */}
+        {/* ── Header ── */}
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:28 }}>
 
-          {/* Ambient glow behind logo */}
+          {/* Ambient radiance */}
           <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10 }}>
             <div style={{
-              position:'absolute', width:200, height:160,
-              background:'radial-gradient(ellipse at center, rgba(124,92,255,0.20) 0%, rgba(90,69,255,0.08) 45%, transparent 70%)',
-              borderRadius:'50%',
+              position:'absolute', width:220, height:180,
+              background:'radial-gradient(ellipse at 50% 55%, rgba(124,92,255,0.22) 0%, rgba(90,69,255,0.08) 50%, transparent 72%)',
+              borderRadius:'50%', pointerEvents:'none',
             }}/>
-            {/* Logo — mix-blend-mode:screen erases the black JPEG background */}
-            <img src={LOGO_BASE64} alt="Flow-Student"
-              style={{
-                width:100, height:100, objectFit:'contain',
-                position:'relative', zIndex:1,
-                mixBlendMode:'screen',
-                filter:'brightness(1.15) contrast(1.1) drop-shadow(0 0 20px rgba(179,136,255,0.85)) drop-shadow(0 0 45px rgba(124,92,255,0.5))',
-              }}
-            />
+            <img src={LOGO_BASE64} alt="Flow-Student" style={{
+              width:104, height:104, objectFit:'contain',
+              position:'relative', zIndex:1,
+              mixBlendMode:'screen',
+              filter:'brightness(1.2) contrast(1.05) drop-shadow(0 0 22px rgba(179,136,255,0.9)) drop-shadow(0 0 48px rgba(124,92,255,0.55))',
+            }}/>
           </div>
 
-          {/* "Flow-Student" — exact gradient from landing page nav, animated */}
+          {/* Brand name — exact landing page gradient, animated */}
           <div style={{
             fontSize:22, fontWeight:800, letterSpacing:'-0.5px', lineHeight:1,
-            background:'linear-gradient(135deg, #e8e8f0 0%, #c4b5fd 30%, #a78bfa 60%, #e8e8f0 100%)',
+            background:'linear-gradient(135deg, #e8e8f0 0%, #c4b5fd 35%, #a78bfa 65%, #e8e8f0 100%)',
             backgroundSize:'200% 200%',
-            WebkitBackgroundClip:'text',
-            WebkitTextFillColor:'transparent',
-            backgroundClip:'text',
-            animation:'gradientShift 4s ease infinite',
-            marginBottom:7,
+            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text',
+            animation:'fsGrad 4s ease infinite', marginBottom:7,
           }}>
             Flow-Student
           </div>
 
           {/* Tagline */}
           <div style={{
-            fontSize:11, fontWeight:400,
-            color:'rgba(179,136,255,0.7)',
-            letterSpacing:'0.03em',
-            animation:'taglineShimmer 3s ease-in-out infinite',
+            fontSize:11, color:'rgba(179,136,255,0.68)', letterSpacing:'0.04em',
+            animation:'tagPulse 3.5s ease-in-out infinite',
           }}>
             AI that flows with the mind
           </div>
         </div>
 
-        {/* ── Intelligence Wave (animated canvas) ───────────────────── */}
-        <IntelligenceWave/>
+        {/* ── Flowing wave ── */}
+        <FlowWave/>
 
-        {/* ── Navigation ─────────────────────────────────────────────── */}
+        {/* ── Nav ── */}
         <nav style={{ flex:1, overflowY:'auto', padding:'0 10px 12px', display:'flex', flexDirection:'column', gap:1 }}>
           {TOOLS.map(t => navItem(`/dashboard/${t.key}`, t.key, t.label, t.badge))}
-          <div style={{ margin:'8px 4px', borderTop:'1px solid rgba(92,69,255,0.08)' }}/>
+          <div style={{ margin:'8px 4px', borderTop:'1px solid rgba(92,69,255,0.07)' }}/>
           {NAV_EXTRAS.map(i => navItem(i.href, i.iconKey, i.label))}
           {isAdmin && navItem('/dashboard/admin','admin','Admin','ADMIN',true)}
         </nav>
 
-        {/* ── Usage footer ───────────────────────────────────────────── */}
-        <div style={{ borderTop:'1px solid rgba(92,69,255,0.08)', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+        {/* ── Footer ── */}
+        <div style={{ borderTop:'1px solid rgba(92,69,255,0.07)', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <div style={{
               width:34, height:34, borderRadius:'50%', flexShrink:0,
@@ -380,7 +337,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
             </div>
           </div>
           <div>
-            <div style={{ height:3, background:'rgba(92,69,255,0.12)', borderRadius:999, overflow:'hidden' }}>
+            <div style={{ height:3, background:'rgba(92,69,255,0.1)', borderRadius:999, overflow:'hidden' }}>
               <div style={{
                 height:'100%', borderRadius:999, width:`${usagePct}%`,
                 background: usagePct>90?'#f87171':usagePct>70?'#fb923c':'linear-gradient(90deg,#5A45FF,#B388FF)',
