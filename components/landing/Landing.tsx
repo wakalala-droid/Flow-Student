@@ -107,7 +107,7 @@ function Nav() {
       }}>
         {/* Logo */}
         <Link href="/" style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', marginRight:'auto', flexShrink:0 }}>
-          <div style={{ width:28, height:28, borderRadius:8, background:'linear-gradient(135deg,#7c3aed,#a855f7)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:13, color:'#fff', boxShadow: scrolled ? '0 0 14px rgba(168,85,247,0.5)' : 'none', transition:'box-shadow .4s', flexShrink:0 }}>✦</div>
+          <img src='/flow-student-icon.png' alt='Flow-Student' width={34} height={34} style={{ borderRadius:10, flexShrink:0, boxShadow: scrolled ? '0 0 14px rgba(168,85,247,0.5)' : 'none', transition:'box-shadow .4s' }} />
           <span style={{ fontWeight:800, fontSize:14, letterSpacing:-0.3, background:'linear-gradient(135deg,#e8e8f0,#a78bfa)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>
             Flow-Student
           </span>

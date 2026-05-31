@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -30,11 +31,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
       {/* Logo */}
       <div className="px-4 py-5 border-b border-white/[0.07]">
         <Link href="/dashboard/humanizer" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#6c63ff] to-violet-400 flex items-center justify-center flex-shrink-0">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 2l1.5 3.5L13 7l-3.5 1.5L8 12l-1.5-3.5L3 7l3.5-1.5z" />
-            </svg>
-          </div>
+          <Image src="/flow-student-icon.png" alt="Flow-Student logo" width={34} height={34} className="rounded-xl flex-shrink-0" />
           <div>
             <div className="text-[13px] font-semibold text-[#e8e8f0] leading-none tracking-tight">Flow-Student</div>
             <div className="text-[9px] font-bold tracking-widest text-violet-400 uppercase mt-0.5">AI Suite</div>
