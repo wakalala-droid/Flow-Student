@@ -104,22 +104,24 @@ export default function AdminPage() {
 
   async function patchUser(userId: string, updates: Record<string, unknown>) {
     setSaving(userId)
-    const res = await fetch('/api/admin/users', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, updates }),
+    const { data, error } = await supabase.rpc('admin_update_user', {
+      target_user_id: userId,
+      updates: updates,
     })
-    const d = await res.json()
-    res.ok ? toast_('Saved ✓') : toast_(d.error ?? 'Failed', false)
+    if (error || !data?.ok) toast_(error?.message ?? data?.error ?? 'Failed', false)
+    else toast_('Saved ✓')
     await fetchUsers(); setSaving(null)
   }
 
   async function resetUsage(userId: string) {
     setSaving(userId)
-    await fetch('/api/admin/users', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, updates: { words_used: 0, scans_used: 0 } }),
+    const { data, error } = await supabase.rpc('admin_update_user', {
+      target_user_id: userId,
+      updates: { words_used: 0, scans_used: 0 },
     })
-    toast_('Usage reset'); await fetchUsers(); setSaving(null)
+    if (error || !data?.ok) toast_(error?.message ?? 'Reset failed', false)
+    else toast_('Usage reset ✓')
+    await fetchUsers(); setSaving(null)
   }
 
   async function deleteUser(u: UserRow) {
