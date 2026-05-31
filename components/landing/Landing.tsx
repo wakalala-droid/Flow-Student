@@ -57,6 +57,47 @@ const FAQS = [
 ]
 
 // ── CASSIS-STYLE NAV — pills on scroll down, full on scroll up ───────────────
+
+// ── LIVE STATS ────────────────────────────────────────────────────────────────
+function LiveStats() {
+  const [words, setWords] = useState(0)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/stats')
+      .then(r => r.json())
+      .then(d => {
+        setWords(d.wordsHumanized ?? 0)
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+
+    // Poll every 30s for live updates
+    const interval = setInterval(() => {
+      fetch('/api/stats').then(r => r.json()).then(d => setWords(d.wordsHumanized ?? 0))
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const stats = [
+    { v: loaded ? <CountUp target={Math.max(words, 10000)} suffix="+" /> : '...', l: 'Words humanized' },
+    { v: <CountUp target={12} />,  l: 'AI tools in one' },
+    { v: '< 3s',                   l: 'Average response' },
+    { v: <><CountUp target={97} suffix="%" /></>, l: 'Human score avg' },
+  ]
+
+  return (
+    <div style={{ display:'flex', gap:48, justifyContent:'center', flexWrap:'wrap' }}>
+      {stats.map((s,i) => (
+        <div key={i} style={{ textAlign:'center' }}>
+          <div style={{ fontSize:'clamp(32px,5vw,56px)', fontWeight:900, letterSpacing:-2, color:'#a78bfa', lineHeight:1, marginBottom:6 }}>{s.v}</div>
+          <div style={{ fontSize:12, color:'rgba(232,232,240,0.4)', fontWeight:500, letterSpacing:'0.05em', textTransform:'uppercase' }}>{s.l}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Nav() {
   const [scrolled, setScrolled] = useState(false)
   const lastY = useRef(0)
@@ -372,20 +413,8 @@ export default function Landing() {
             <a href="#how-it-works" style={{ padding:'15px 32px', background:'rgba(255,255,255,0.07)', color:'#e8e8f0', borderRadius:14, fontSize:16, fontWeight:600, textDecoration:'none', border:'1px solid rgba(255,255,255,0.12)', backdropFilter:'blur(8px)' }}>See how it works</a>
           </div>
 
-          {/* Animated stats */}
-          <div style={{ display:'flex', gap:48, justifyContent:'center', flexWrap:'wrap' }}>
-            {[
-              { v:<CountUp target={847293} suffix="+" />, l:'Words humanized' },
-              { v:<CountUp target={9} />,                l:'AI tools in one' },
-              { v:'< 3s',                                l:'Average response' },
-              { v:<><CountUp target={97} suffix="%" /></>, l:'Human score avg' },
-            ].map((s,i) => (
-              <div key={i} style={{ textAlign:'center' }}>
-                <div style={{ fontSize:'clamp(32px,5vw,56px)', fontWeight:900, letterSpacing:-2, color:'#a78bfa', lineHeight:1, marginBottom:6 }}>{s.v}</div>
-                <div style={{ fontSize:12, color:'rgba(232,232,240,0.4)', fontWeight:500 }}>{s.l}</div>
-              </div>
-            ))}
-          </div>
+          {/* Animated stats — live from DB */}
+          <LiveStats />
         </div>
       </section>
 

@@ -26,22 +26,22 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
   }, [])
 
   return (
-    <aside className="w-[220px] flex-shrink-0 flex flex-col bg-[#111118] border-r border-white/[0.07] overflow-hidden">
+    <aside className="w-[232px] flex-shrink-0 flex flex-col bg-[#111118] border-r border-white/[0.07] overflow-hidden">
 
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-white/[0.07]">
+      <div className="px-4 py-4 border-b border-white/[0.07]">
         <Link href="/dashboard/humanizer" className="flex items-center gap-2.5 group">
           <img src={LOGO_BASE64} alt="Flow-Student" style={{ width:34, height:34, borderRadius:10, flexShrink:0 }} />
           <div>
-            <div className="text-[13px] font-semibold text-[#e8e8f0] leading-none tracking-tight">Flow-Student</div>
-            <div className="text-[9px] font-bold tracking-widest text-violet-400 uppercase mt-0.5">AI Suite</div>
+            <div className="text-[14px] font-semibold text-[#e8e8f0] leading-none tracking-[-0.3px]">Flow-Student</div>
+            <div className="text-[10px] font-bold tracking-[0.15em] text-violet-400 uppercase mt-1">AI Suite</div>
           </div>
         </Link>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        <p className="px-2.5 pt-1 pb-2 text-[10px] font-semibold text-[#7a7a9a] uppercase tracking-widest">Tools</p>
+      <nav className="flex-1 overflow-y-auto py-2 px-2.5 space-y-px">
+        <p className="px-3 pt-2 pb-1.5 text-[11px] font-semibold text-[#5a5a7a] uppercase tracking-[0.08em]">Tools</p>
 
         {TOOLS.map(tool => {
           const href   = `/dashboard/${tool.key}`
@@ -51,10 +51,10 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
               key={tool.key}
               href={href}
               className={cn(
-                'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition-all duration-150 group',
+                'flex items-center gap-3 px-3 py-[7px] rounded-xl text-[13px] font-medium transition-all duration-150 group leading-none',
                 active
                   ? 'bg-[#6c63ff]/15 text-[#e8e8f0]'
-                  : 'text-[#7a7a9a] hover:text-[#c8c8d8] hover:bg-white/[0.04]'
+                  : 'text-[#8888a8] hover:text-[#c8c8d8] hover:bg-white/[0.04]'
               )}
             >
               {/* Icon container — matches Quillbot style */}
@@ -71,7 +71,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
 
               {tool.badge && (
                 <span className={cn(
-                  'ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0',
+                  'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 leading-none',
                   tool.badge === 'HOT' ? 'bg-orange-400/20 text-orange-300' :
                   tool.badge === 'NEW' ? 'bg-emerald-400/20 text-emerald-300' :
                   'bg-[#6c63ff]/20 text-violet-300'
@@ -83,8 +83,8 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
           )
         })}
 
-        <div className="my-2 border-t border-white/[0.05]" />
-        <p className="px-2.5 pt-1 pb-2 text-[10px] font-semibold text-[#7a7a9a] uppercase tracking-widest">Account</p>
+        <div className="my-1.5 mx-1 border-t border-white/[0.05]" />
+        <p className="px-3 pt-2 pb-1.5 text-[11px] font-semibold text-[#5a5a7a] uppercase tracking-[0.08em]">Account</p>
 
         {NAV_EXTRAS.map(item => {
           const active = pathname === item.href
@@ -93,10 +93,10 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition-all duration-150 group',
+                'flex items-center gap-3 px-3 py-[7px] rounded-xl text-[13px] font-medium transition-all duration-150 group leading-none',
                 active
                   ? 'bg-[#6c63ff]/15 text-[#e8e8f0]'
-                  : 'text-[#7a7a9a] hover:text-[#c8c8d8] hover:bg-white/[0.04]'
+                  : 'text-[#8888a8] hover:text-[#c8c8d8] hover:bg-white/[0.04]'
               )}
             >
               <span className={cn(
@@ -117,7 +117,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
           <Link
             href="/dashboard/admin"
             className={cn(
-              'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition-all duration-150 group',
+              'flex items-center gap-3 px-3 py-[7px] rounded-xl text-[13px] font-medium transition-all duration-150 group leading-none',
               pathname === '/dashboard/admin'
                 ? 'bg-red-400/15 text-red-300'
                 : 'text-[#7a7a9a] hover:text-red-300 hover:bg-red-400/[0.06]'
@@ -146,8 +146,8 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
             {profile?.full_name?.[0]?.toUpperCase() ?? 'U'}
           </div>
           <div className="min-w-0">
-            <div className="text-xs font-medium text-[#e8e8f0] truncate">{profile?.full_name ?? 'User'}</div>
-            <div className="text-[10px] text-[#7a7a9a] capitalize">{profile?.plan ?? 'free'} plan</div>
+            <div className="text-[13px] font-medium text-[#e8e8f0] truncate leading-none">{profile?.full_name ?? 'User'}</div>
+            <div className="text-[11px] text-[#6666aa] capitalize mt-0.5">{profile?.plan ?? 'free'} plan</div>
           </div>
         </div>
 
@@ -163,7 +163,7 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
               style={{ width: `${usagePct}%` }}
             />
           </div>
-          <div className="flex justify-between text-[10px] text-[#7a7a9a] mt-1.5">
+          <div className="flex justify-between text-[11px] text-[#6666aa] mt-1.5">
             <span>
               {profile?.words_used?.toLocaleString() ?? 0}
               {' / '}
