@@ -77,6 +77,9 @@ export type ToolKey =
   | 'seo'
   | 'tone'
   | 'citation'
+  | 'summarizer'
+  | 'translator'
+  | 'social'
 
 export interface ToolMeta {
   key: ToolKey
@@ -88,15 +91,18 @@ export interface ToolMeta {
 }
 
 export const TOOLS: ToolMeta[] = [
-  { key: 'humanizer',  label: 'AI Humanizer',        icon: '✨', description: 'Make AI text sound natural', badge: 'HOT', minPlan: 'free' },
-  { key: 'detector',  label: 'AI Detector',          icon: '🔍', description: 'Detect AI-generated content', minPlan: 'free' },
-  { key: 'plagiarism',label: 'Plagiarism Check',     icon: '📋', description: 'Check originality', minPlan: 'student' },
-  { key: 'paraphraser',label:'Paraphraser',          icon: '🔄', description: 'Rewrite intelligently', minPlan: 'free' },
-  { key: 'grammar',   label: 'Grammar Fix',          icon: '✅', description: 'Fix all writing issues', minPlan: 'free' },
-  { key: 'factcheck', label: 'Fact Checker',         icon: '🧾', description: 'Verify claims & facts', minPlan: 'student' },
-  { key: 'seo',       label: 'SEO Optimizer',        icon: '📈', description: 'Optimise for search', minPlan: 'pro' },
-  { key: 'tone',      label: 'Tone Rewriter',        icon: '🎭', description: 'Adapt tone for any audience', minPlan: 'free' },
-  { key: 'citation',  label: 'Citation Generator',   icon: '📚', description: 'APA, MLA, Chicago & more', minPlan: 'student' },
+  { key: 'humanizer',  label: 'AI Humanizer',          icon: '✨', description: 'Make AI text sound natural',     badge: 'HOT', minPlan: 'free'    },
+  { key: 'detector',  label: 'AI Detector',            icon: '🔍', description: 'Detect AI-generated content',               minPlan: 'free'    },
+  { key: 'plagiarism',label: 'Plagiarism Check',       icon: '📋', description: 'Check originality',                         minPlan: 'student' },
+  { key: 'paraphraser',label:'Paraphraser',            icon: '🔄', description: 'Rewrite intelligently',                      minPlan: 'free'    },
+  { key: 'grammar',   label: 'Grammar Fix',            icon: '✅', description: 'Fix all writing issues',                    minPlan: 'free'    },
+  { key: 'factcheck', label: 'Fact Checker',           icon: '🧾', description: 'Verify claims & facts',                     minPlan: 'student' },
+  { key: 'seo',       label: 'SEO Optimizer',          icon: '📈', description: 'Optimise for search',                       minPlan: 'pro'     },
+  { key: 'tone',      label: 'Tone Rewriter',          icon: '🎭', description: 'Adapt tone for any audience',               minPlan: 'free'    },
+  { key: 'citation',  label: 'Citation Generator',     icon: '📚', description: 'APA, MLA, Chicago & more',                  minPlan: 'student' },
+  { key: 'summarizer',label: 'Summarizer',             icon: '📝', description: 'Condense text quickly',          badge: 'NEW', minPlan: 'free'    },
+  { key: 'translator',label: 'Translator',             icon: '🌍', description: 'Translate text instantly',       badge: 'NEW', minPlan: 'free'    },
+  { key: 'social',    label: 'Social Media Writer',    icon: '#️⃣', description: 'Write engaging posts fast',     badge: 'NEW', minPlan: 'free'    },
 ]
 
 export const PLAN_ORDER = { free: 0, student: 1, pro: 2, team: 3 }
