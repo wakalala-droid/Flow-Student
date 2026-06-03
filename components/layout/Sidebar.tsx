@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { TOOLS } from '@/types'
 import type { Profile } from '@/types'
 import ToolIcon from '@/components/shared/ToolIcon'
@@ -13,150 +13,6 @@ const NAV_EXTRAS = [
   { href:'/dashboard/settings',  iconKey:'settings',  label:'Settings'  },
 ]
 
-// Remove black background from JPEG by zeroing near-black pixels on a canvas
-function useCleanLogo(src: string): string {
-  const [url, setUrl] = useState('')
-  useEffect(() => {
-    if (!src) return
-    const img = new window.Image()
-    img.onload = () => {
-      const c   = document.createElement('canvas')
-      c.width   = img.width
-      c.height  = img.height
-      const ctx = c.getContext('2d')!
-      ctx.drawImage(img, 0, 0)
-      const id  = ctx.getImageData(0, 0, c.width, c.height)
-      const px  = id.data
-      for (let i = 0; i < px.length; i += 4) {
-        const bright = Math.max(px[i], px[i+1], px[i+2])
-        if (bright < 22) {
-          px[i+3] = 0
-        } else if (bright < 50) {
-          px[i+3] = Math.round(((bright - 22) / 28) * px[i+3])
-        }
-      }
-      ctx.putImageData(id, 0, 0)
-      setUrl(c.toDataURL('image/png'))
-    }
-    img.src = src
-  }, [src])
-  return url
-}
-
-// Organic flowing wave — 3 ribbon streams, different phase/amplitude/centre
-function FlowWave() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')!
-    const W = 248, H = 88
-    canvas.width  = W
-    canvas.height = H
-    let frame = 0
-    let raf: number
-
-    const ribbons = [
-      { cy: H*0.44, amp: H*0.30, phase: 0,              freq: 1.00, strands: 14, spread: 20, r:179, g:136, b:255, alpha: 0.82 },
-      { cy: H*0.56, amp: H*0.22, phase: Math.PI * 0.68, freq: 1.10, strands: 12, spread: 15, r:124, g: 92, b:255, alpha: 0.70 },
-      { cy: H*0.50, amp: H*0.15, phase: Math.PI * 1.42, freq: 0.88, strands:  7, spread:  9, r:220, g:200, b:255, alpha: 0.50 },
-    ]
-
-    function fadedGrad(colorR: number, colorG: number, colorB: number, a: number) {
-      const g = ctx.createLinearGradient(0, 0, W, 0)
-      g.addColorStop(0,    `rgba(${colorR},${colorG},${colorB},0)`)
-      g.addColorStop(0.07, `rgba(${colorR},${colorG},${colorB},${a * 0.55})`)
-      g.addColorStop(0.30, `rgba(${colorR},${colorG},${colorB},${a})`)
-      g.addColorStop(0.70, `rgba(${colorR},${colorG},${colorB},${a})`)
-      g.addColorStop(0.93, `rgba(${colorR},${colorG},${colorB},${a * 0.55})`)
-      g.addColorStop(1,    `rgba(${colorR},${colorG},${colorB},0)`)
-      return g
-    }
-
-    function drawFade(x1: number, y1: number, x2: number, y2: number, rx: number, ry: number, rw: number, rh: number) {
-      const f = ctx.createLinearGradient(x1, y1, x2, y2)
-      f.addColorStop(0, '#0A0914')
-      f.addColorStop(1, 'rgba(10,9,20,0)')
-      ctx.fillStyle = f
-      ctx.fillRect(rx, ry, rw, rh)
-    }
-
-    function tick() {
-      ctx.clearRect(0, 0, W, H)
-      const t = frame * 0.007
-
-      ribbons.forEach(({ cy, amp, phase, freq, strands, spread, r, g, b, alpha }) => {
-        for (let s = 0; s < strands; s++) {
-          const frac     = strands > 1 ? (s / (strands - 1)) - 0.5 : 0
-          const offset   = frac * spread
-          const edge     = Math.abs(frac) * 2
-          const a        = alpha * (1 - edge * 0.66) * (0.86 + 0.14 * Math.sin(t + s * 0.4))
-          const lw       = 0.45 + (1 - edge) * 0.72
-          const isCentre = s === Math.floor(strands / 2)
-
-          ctx.beginPath()
-          for (let xi = 0; xi <= W; xi += 1.5) {
-            const wave = amp * Math.sin((xi / W) * Math.PI * 2 * freq + phase + t * 0.75)
-                       + amp * 0.14 * Math.sin((xi / W) * Math.PI * 4 * freq + phase * 1.3 + t * 1.1)
-            const y = cy + wave + offset
-            xi < 1 ? ctx.moveTo(xi, y) : ctx.lineTo(xi, y)
-          }
-
-          ctx.save()
-          if (isCentre) { ctx.shadowBlur = 9; ctx.shadowColor = `rgba(${r},${g},${b},0.65)` }
-          ctx.strokeStyle = fadedGrad(r, g, b, a)
-          ctx.lineWidth   = lw
-          ctx.stroke()
-          ctx.restore()
-        }
-      })
-
-      // Particles
-      const pts: [number, number][] = [
-        [16,30],[40,56],[68,24],[94,48],[116,68],[140,30],[163,52],[188,26],[214,46],[236,34],
-        [28,62],[76,42],[128,18],[172,60],[226,50],
-      ]
-      pts.forEach(([px, py], i) => {
-        const drift = Math.sin(t * 0.5 + i * 0.55) * 3
-        const a  = 0.18 + 0.38 * Math.abs(Math.sin(t * 0.4 + i * 0.65))
-        const pr = 0.55 + 0.5 * Math.abs(Math.sin(t * 0.7 + i))
-        const pg = ctx.createRadialGradient(px, py+drift, 0, px, py+drift, pr*5)
-        pg.addColorStop(0, `rgba(220,200,255,${a})`)
-        pg.addColorStop(1, 'rgba(179,136,255,0)')
-        ctx.fillStyle = pg
-        ctx.beginPath()
-        ctx.arc(px, py+drift, pr*5, 0, Math.PI*2)
-        ctx.fill()
-      })
-
-      // Ambient glow
-      const atm = ctx.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, W*0.6)
-      atm.addColorStop(0, `rgba(90,69,255,${0.035 + 0.015*Math.sin(t)})`)
-      atm.addColorStop(1, 'rgba(90,69,255,0)')
-      ctx.fillStyle = atm
-      ctx.fillRect(0, 0, W, H)
-
-      // Edge fades
-      drawFade(0, 0, 20, 0,    0,    0, 20, H)
-      drawFade(W, 0, W-20, 0,  W-20, 0, 20, H)
-      drawFade(0, 0, 0, 18,    0,    0, W, 18)
-      drawFade(0, H, 0, H-18,  0, H-18, W, 18)
-
-      frame++
-      raf = requestAnimationFrame(tick)
-    }
-
-    tick()
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  return (
-    <canvas ref={canvasRef}
-      style={{ width:'100%', height:88, display:'block', flexShrink:0 }}
-    />
-  )
-}
 
 function NavItem({ href, iconKey, label, badge, danger = false, active }: {
   href:string; iconKey:string; label:string
@@ -211,7 +67,6 @@ function NavItem({ href, iconKey, label, badge, danger = false, active }: {
 
 export default function Sidebar({ profile }: { profile: Profile | null }) {
   const pathname = usePathname()
-  const logoUrl  = useCleanLogo(LOGO_BASE64)
   const [isAdmin, setIsAdmin] = useState(false)
   const usagePct = profile
     ? Math.min(100, Math.round((profile.words_used / profile.words_limit) * 100))
@@ -248,13 +103,13 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
               borderRadius:'50%', pointerEvents:'none',
             }}/>
             <img
-              src={logoUrl || LOGO_BASE64}
+              src={LOGO_BASE64}
               alt="Flow-Student"
               style={{
-                width:108, height:108, objectFit:'contain',
+                width:96, height:96, objectFit:'contain',
                 position:'relative', zIndex:1,
-                ...(logoUrl ? {} : { mixBlendMode:'screen' as const }),
-                filter:'drop-shadow(0 0 22px rgba(179,136,255,0.85)) drop-shadow(0 0 44px rgba(124,92,255,0.50))',
+                borderRadius:20,
+                filter:'drop-shadow(0 0 18px rgba(179,136,255,0.7)) drop-shadow(0 0 36px rgba(124,92,255,0.4))',
               }}
             />
           </div>
@@ -280,8 +135,6 @@ export default function Sidebar({ profile }: { profile: Profile | null }) {
           </div>
         </div>
 
-        {/* Wave */}
-        <FlowWave/>
 
         {/* Nav */}
         <nav style={{ flex:1, overflowY:'auto', padding:'0 10px 12px', display:'flex', flexDirection:'column', gap:1 }}>

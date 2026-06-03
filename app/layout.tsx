@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Sans, DM_Mono } from 'next/font/google'
+import { DM_Sans, DM_Mono, Inter } from 'next/font/google'
 import './globals.css'
+import { cn } from "@/lib/utils";
+
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -37,7 +40,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={cn("dark", "font-sans", inter.variable)}>
       <body className={`${dmSans.variable} ${dmMono.variable} font-sans antialiased`}>
         {children}
       </body>
