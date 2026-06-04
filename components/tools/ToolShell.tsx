@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import { cn, countWords, countSentences, readingTime } from '@/lib/utils'
 import { useTextMemory } from '@/hooks/useTextMemory'
 import FileUpload from './FileUpload'
+import AILoader from '@/components/shared/AILoader'
 
 interface ToolShellProps {
   toolKey: string
@@ -168,10 +169,8 @@ export default function ToolShell({
 
             <div ref={outputRef} className="flex-1 overflow-y-auto p-3 lg:p-4">
               {isLoading ? (
-                <div className="flex flex-col items-center justify-center h-full gap-3 text-[#7a7a9a]">
-                  <div className="w-8 h-8 border-2 border-white/10 border-t-[#6c63ff] rounded-full animate-spin" />
-                  <span className="text-sm">Processing with Groq AI…</span>
-                  <span className="text-[11px]">Llama 3.3 70B</span>
+                <div className="flex items-center justify-center h-full">
+                  <AILoader />
                 </div>
               ) : error ? (
                 <div className="flex flex-col items-center justify-center h-full gap-2">
