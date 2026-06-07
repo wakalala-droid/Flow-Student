@@ -41,6 +41,7 @@ export default function ToolShell({
   const [error, setError]           = useState<string | null>(null)
   const [optionsCache, setOptionsCache] = useState<Record<string, unknown>>({})
   const [showUpload, setShowUpload] = useState(false)
+  const [showOptions, setShowOptions] = useState(false)
   const [activeTab, setActiveTab]   = useState<'input' | 'output'>('input')
   const outputRef = useRef<HTMLDivElement>(null)
 
@@ -122,7 +123,14 @@ export default function ToolShell({
                 {inputText && (
                   <span className="text-[10px] text-emerald-400 font-medium">● Saved</span>
                 )}
-                <button onClick={() => setShowUpload(v => !v)} className="btn-ghost text-[10px] py-1 px-2">⬆</button>
+                <button onClick={() => setShowUpload(v => !v)}
+                    title="Upload file"
+                    className={cn("btn-ghost py-1.5 px-2 rounded-lg transition-colors", showUpload && "bg-[#6c63ff]/20 text-violet-300")}>
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7.5 10V3M7.5 3L4.5 6M7.5 3L10.5 6"/>
+                    <path d="M2 11v1.5A1.5 1.5 0 003.5 14h8A1.5 1.5 0 0013 12.5V11"/>
+                  </svg>
+                </button>
                 <button onClick={clear} className="btn-ghost text-[10px] py-1 px-2">Clear</button>
               </div>
             </div>
@@ -142,6 +150,15 @@ export default function ToolShell({
 
             <div className="px-3 lg:px-4 py-2 border-t border-white/[0.07] flex items-center gap-2 flex-shrink-0">
               <span className="text-[10px] text-[#7a7a9a] hidden sm:block">{sentences}s · ~{readTime}m</span>
+              {sidePanel && (
+                <button onClick={() => setShowOptions(v => !v)}
+                  className={cn("btn-ghost py-1.5 px-2.5 text-[11px] lg:hidden flex items-center gap-1.5 rounded-lg", showOptions && "bg-[#6c63ff]/20 text-violet-300")}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <circle cx="7" cy="7" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="12" cy="7" r="1.5"/>
+                  </svg>
+                  Options
+                </button>
+              )}
               <button onClick={() => run()} disabled={isLoading || !inputText.trim()}
                 className="ml-auto btn-primary text-xs py-2 px-4 min-h-[36px]">
                 {isLoading ? (
@@ -152,6 +169,13 @@ export default function ToolShell({
                 ) : `▶ ${runLabel}`}
               </button>
             </div>
+
+            {/* Mobile options panel */}
+            {sidePanel && showOptions && (
+              <div className="lg:hidden border-t border-white/[0.07] p-3 flex flex-col gap-3 bg-[#0d0d14] overflow-y-auto max-h-56">
+                {sidePanel(state)}
+              </div>
+            )}
           </div>
 
           {/* Output panel */}
@@ -169,8 +193,10 @@ export default function ToolShell({
 
             <div ref={outputRef} className="flex-1 overflow-y-auto p-3 lg:p-4">
               {isLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <AILoader />
+                <div className="flex flex-col items-center justify-center h-full gap-3 text-[#7a7a9a]">
+                  <div className="w-8 h-8 border-2 border-white/10 border-t-[#6c63ff] rounded-full animate-spin" />
+                  <span className="text-sm">Processing with Groq AI…</span>
+                  <span className="text-[11px]">Llama 3.3 70B</span>
                 </div>
               ) : error ? (
                 <div className="flex flex-col items-center justify-center h-full gap-2">

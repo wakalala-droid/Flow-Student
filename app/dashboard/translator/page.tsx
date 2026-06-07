@@ -40,7 +40,7 @@ export default function TranslatorPage() {
           <button
             onClick={() => state.run({ targetLanguage: lang, tone })}
             disabled={state.isLoading || !state.inputText.trim()}
-            className="btn-primary w-full justify-center text-xs py-2">
+            className="btn-primary w-full justify-center text-xs py-2 hidden lg:flex">
             ▶ Translate
           </button>
         </>

@@ -60,7 +60,7 @@ export default function SocialPage() {
           <button
             onClick={() => state.run({ platform, tone, includeHashtags, includeEmoji })}
             disabled={state.isLoading || !state.inputText.trim()}
-            className="btn-primary w-full justify-center text-xs py-2">
+            className="btn-primary w-full justify-center text-xs py-2 hidden lg:flex">
             ▶ Write Post
           </button>
         </>

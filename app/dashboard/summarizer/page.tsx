@@ -45,7 +45,7 @@ export default function SummarizerPage() {
           <button
             onClick={() => state.run({ style, length })}
             disabled={state.isLoading || !state.inputText.trim()}
-            className="btn-primary w-full justify-center text-xs py-2">
+            className="btn-primary w-full justify-center text-xs py-2 hidden lg:flex">
             ▶ Summarize
           </button>
         </>
